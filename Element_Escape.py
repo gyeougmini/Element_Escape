@@ -17,9 +17,12 @@ def handle_events():
 
 open_canvas(WIDTH, HEIGHT)
 
+background = load_image('sprite_sheet/cell_bg.png')
+
 while running:
     handle_events()
     clear_canvas()
+    background.draw(WIDTH // 2, HEIGHT // 2, WIDTH, HEIGHT)
     update_canvas()
     delay(0.01)
 
