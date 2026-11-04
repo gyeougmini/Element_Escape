@@ -9,7 +9,7 @@ IDLE_FRAMES = 2
 WALK_FPS = 10  # 걷기 애니메이션 초당 프레임 수
 IDLE_FPS = 2   # idle 애니메이션 초당 프레임 수
 KAI_SCALE = 1.5
-KAI_SPEED = 100  # 초당 이동 픽셀
+KAI_SPEED = 200  # 초당 이동 픽셀
 
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터)
 DIRECTION_ROWS = {
@@ -40,6 +40,10 @@ class Kai:
         self.dir_x, self.dir_y = 0, 0
         self.row = 0
         self.anim_time = 0.0
+
+    def foot_y(self):
+        # 프레임 아래쪽 끝을 발 위치로 사용
+        return self.y - FRAME_SIZE * KAI_SCALE / 2
 
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)

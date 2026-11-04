@@ -43,7 +43,13 @@ while running:
 
     clear_canvas()
     background.draw()
-    kai.draw()
+    # 카이가 창살 뒤(감방 안)에 있으면 창살이 카이를 가리도록 나중에 그림
+    if kai.foot_y() > background.gate_base_y:
+        kai.draw()
+        background.draw_gate()
+    else:
+        background.draw_gate()
+        kai.draw()
     update_canvas()
     delay(0.01)
 
