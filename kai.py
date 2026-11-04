@@ -1,5 +1,7 @@
 from pico2d import *
 
+from collision import collide_any
+
 # 두 시트 모두 프레임 64x64, 8행(방향)이며 높이 512
 # kai_animation_sheet.png: 9열 (0~5열 걷기), kai_idle.png: 2열
 FRAME_SIZE = 64
@@ -10,6 +12,9 @@ WALK_FPS = 10  # 걷기 애니메이션 초당 프레임 수
 IDLE_FPS = 2   # idle 애니메이션 초당 프레임 수
 KAI_SCALE = 1.5
 KAI_SPEED = 200  # 초당 이동 픽셀
+# 탑뷰이므로 몸 전체가 아니라 발 부분만 충돌 박스로 사용
+FOOT_HALF_WIDTH = 15
+FOOT_HEIGHT = 12
 
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터)
 DIRECTION_ROWS = {
@@ -45,6 +50,11 @@ class Kai:
         # 프레임 아래쪽 끝을 발 위치로 사용
         return self.y - FRAME_SIZE * KAI_SCALE / 2
 
+    def get_bb(self):
+        foot_y = self.foot_y()
+        return (self.x - FOOT_HALF_WIDTH, foot_y,
+                self.x + FOOT_HALF_WIDTH, foot_y + FOOT_HEIGHT)
+
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)
 
@@ -56,12 +66,19 @@ class Kai:
         self.dir_x += dx * sign
         self.dir_y += dy * sign
 
-    def update(self, frame_time):
+    def update(self, frame_time, obstacles):
         self.anim_time += frame_time
         if self.is_moving():
             self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
+            # x, y를 따로 움직이고 부딪힌 축만 되돌려서 벽을 따라 미끄러지듯 이동
+            old_x = self.x
             self.x += self.dir_x * KAI_SPEED * frame_time
+            if collide_any(self.get_bb(), obstacles):
+                self.x = old_x
+            old_y = self.y
             self.y += self.dir_y * KAI_SPEED * frame_time
+            if collide_any(self.get_bb(), obstacles):
+                self.y = old_y
 
     def draw(self):
         if self.is_moving():

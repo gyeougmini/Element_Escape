@@ -3,21 +3,25 @@ import os
 from pico2d import *
 
 from background import Background
+from collision import draw_bb
 from kai import Kai
 
 WIDTH, HEIGHT = 1280, 720
 
 running = True
+show_bbs = False  # F1로 충돌 박스 표시 토글
 
 
 def handle_events():
-    global running
+    global running, show_bbs
     events = get_events()
     for event in events:
         if event.type == SDL_QUIT:
             running = False
         elif event.type == SDL_KEYDOWN and event.key == SDLK_ESCAPE:
             running = False
+        elif event.type == SDL_KEYDOWN and event.key == SDLK_F1:
+            show_bbs = not show_bbs
         else:
             kai.handle_event(event)
 
@@ -39,7 +43,7 @@ while running:
     frame_time = now - last_time
     last_time = now
 
-    kai.update(frame_time)
+    kai.update(frame_time, background.get_bbs())
 
     clear_canvas()
     background.draw()
@@ -50,6 +54,9 @@ while running:
     else:
         background.draw_gate()
         kai.draw()
+    if show_bbs:
+        background.draw_bbs()
+        draw_bb(kai.get_bb())
     update_canvas()
     delay(0.01)
 
