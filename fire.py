@@ -60,15 +60,17 @@ class Fireball:
         self.anim_time += frame_time
         self.x += self.vx * frame_time
         self.y += self.vy * frame_time
-        for bb, burnable in game_world.obstacles:
+        for bb, burnable, on_hit in game_world.obstacles:
             if collide(self.get_bb(), bb):
-                self.hit(burnable)
+                self.hit(burnable, on_hit)
                 return
 
-    def hit(self, burnable):
+    def hit(self, burnable, on_hit):
         self.alive = False
         game_world.add(FireImpact(self.x, self.y))
-        if burnable:
+        # 맞은 물체가 직접 반응을 처리하면(예: 자물쇠가 달아오름) 불꽃은 남기지 않음
+        handled = on_hit() if on_hit else False
+        if burnable and not handled:
             game_world.add(Burning(self.x, self.y))
 
     def draw(self):

@@ -1,9 +1,7 @@
 from pico2d import *
 
-from collision import draw_bb
-
 BG_IMAGE_WIDTH, BG_IMAGE_HEIGHT = 1024, 768
-GATE_BASE_IMAGE_Y = 500  # bars_gate.png에서 창살 아래쪽 끝의 y (위에서부터, 픽셀)
+GATE_BASE_IMAGE_Y = 500  # 창살 아래쪽 끝의 y (위에서부터, 픽셀)
 
 WALL, OBJECT = False, True  # 파이어볼에 맞았을 때 불이 붙는지(burnable)
 
@@ -17,10 +15,9 @@ OBSTACLES = [
     # 감방 사이 벽
     (256, 0, 320, 500, WALL),    # No.12 | No.07
     (704, 0, 768, 510, WALL),    # No.07 | 복도
-    # 창살 (아래쪽 끝 부분만)
+    # 창살 (아래쪽 끝 부분만). No.07 문(자물쇠)은 열리고 닫히므로 gate.py에서 관리
     (64, 485, 256, 500, WALL),   # No.12
     (320, 485, 445, 500, WALL),  # No.07 문 왼쪽
-    (445, 485, 515, 500, OBJECT),  # No.07 문 (자물쇠)
     (515, 485, 704, 500, WALL),  # No.07 문 오른쪽
     # No.12 감방
     (84, 130, 176, 295, OBJECT),   # 침대
@@ -42,15 +39,13 @@ class Background:
         # 배치는 같고 조명만 꺼진 버전: 충돌 박스는 그대로 사용
         self.dark_image = load_image('sprite_sheet_bg/cell_dark_bg.png')
         self.image = self.light_image
-        # cell_bg.png와 같은 크기(1024x768)의 투명 이미지로, 창살이 감방 경계에 맞춰 그려져 있음
-        self.gate_image = load_image('sprit_sheet_object/bars_gate.png')
         self.width, self.height = width, height
         # 창살 아래쪽 끝의 캔버스 y 좌표: 이보다 위에 발이 있으면 감방 안(창살 뒤)
         self.gate_base_y = self.to_canvas_y(GATE_BASE_IMAGE_Y)
+        # (bb, burnable, on_hit): on_hit은 파이어볼에 맞았을 때 부를 함수 (배경 물체는 없음)
         self.obstacles = [((self.to_canvas_x(left), self.to_canvas_y(bottom),
-                            self.to_canvas_x(right), self.to_canvas_y(top)), burnable)
+                            self.to_canvas_x(right), self.to_canvas_y(top)), burnable, None)
                           for left, top, right, bottom, burnable in OBSTACLES]
-        self.bbs = [bb for bb, _ in self.obstacles]
 
     def to_canvas_x(self, image_x):
         return image_x * self.width / BG_IMAGE_WIDTH
@@ -62,19 +57,8 @@ class Background:
     def set_dark(self, dark):
         self.image = self.dark_image if dark else self.light_image
 
-    def get_bbs(self):
-        return self.bbs
-
     def get_obstacles(self):
-        # (bb, burnable) 목록
         return self.obstacles
 
     def draw(self):
         self.image.draw(self.width // 2, self.height // 2, self.width, self.height)
-
-    def draw_gate(self):
-        self.gate_image.draw(self.width // 2, self.height // 2, self.width, self.height)
-
-    def draw_bbs(self):
-        for bb in self.bbs:
-            draw_bb(bb)

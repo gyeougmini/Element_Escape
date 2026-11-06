@@ -5,6 +5,7 @@ import game_world
 from background import Background
 from collision import draw_bb
 from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
+from gate import Gate
 from kai import Kai
 from notice import Notice
 
@@ -36,18 +37,24 @@ def make_arc_dialogue():
     return box
 
 
+def update_obstacles():
+    # 문은 열리면 충돌 박스가 바뀌므로 배경과 문의 장애물을 매 프레임 합침
+    game_world.obstacles = background.get_obstacles() + gate.get_obstacles()
+
+
 def init():
-    global background, kai, notice, after_notice_time, lights_off, dialogue
+    global background, gate, kai, notice, after_notice_time, lights_off, dialogue
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
     lights_off = False
     dialogue = None  # 지금 떠 있는 대화창
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
+    gate = Gate(background)
     kai = Kai(0, 0)
     start_x, start_y = KAI_START_IMAGE_POS
     kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
-    game_world.obstacles = background.get_obstacles()
+    update_obstacles()
 
 
 def finish():
@@ -87,11 +94,14 @@ def update(frame_time):
         if after_notice_time >= LIGHTS_OFF_DELAY:
             lights_off = True
             background.set_dark(True)
+            gate.set_dark(True)
             kai.stop()
             dialogue = make_arc_dialogue()
     if dialogue:
         dialogue.update(frame_time)
-    kai.update(frame_time, background.get_bbs())
+    gate.update(frame_time)
+    update_obstacles()
+    kai.update(frame_time, [bb for bb, _, _ in game_world.obstacles])
     game_world.update(frame_time)
 
 
@@ -100,9 +110,9 @@ def draw():
     # 카이가 창살 뒤(감방 안)에 있으면 창살이 카이를 가리도록 나중에 그림
     if kai.foot_y() > background.gate_base_y:
         kai.draw()
-        background.draw_gate()
+        gate.draw()
     else:
-        background.draw_gate()
+        gate.draw()
         kai.draw()
     # 파이어볼과 불꽃 이펙트는 항상 맨 위에 그림
     game_world.draw()
@@ -110,7 +120,8 @@ def draw():
     if dialogue:
         dialogue.draw()
     if show_bbs:
-        background.draw_bbs()
+        for bb, _, _ in game_world.obstacles:
+            draw_bb(bb)
         draw_bb(kai.get_bb())
         for o in game_world.objects:
             if hasattr(o, 'get_bb'):

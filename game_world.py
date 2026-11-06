@@ -2,7 +2,7 @@
 # 각 오브젝트는 update(frame_time), draw(), alive 를 가짐
 
 objects = []
-obstacles = []  # (bb, burnable) 목록. 메인에서 배경을 만든 뒤 채움
+obstacles = []  # (bb, burnable, on_hit) 목록. play_mode가 매 프레임 채움
 
 
 def add(o):
