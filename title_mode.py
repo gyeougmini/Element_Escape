@@ -10,7 +10,7 @@ OPTION_BUTTON_MARGIN = 50  # 오른쪽 위 모서리에서 설정 버튼 중심�
 
 
 def start_game():
-    game_framework.change_mode(play_mode)
+    game_framework.fade_to(play_mode)
 
 
 def open_option():
@@ -51,9 +51,7 @@ def update(frame_time):
 
 
 def draw():
-    clear_canvas()
     width, height = get_canvas_width(), get_canvas_height()
     image.draw(width // 2, height // 2, width, height)
     for button in buttons:
         button.draw()
-    update_canvas()

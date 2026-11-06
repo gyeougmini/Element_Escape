@@ -28,7 +28,7 @@ def handle_events():
             game_framework.quit()
         elif event.type == SDL_KEYDOWN and event.key == SDLK_ESCAPE:
             import title_mode  # title_mode가 play_mode를 import하므로 순환 import를 피해 여기서 불러옴
-            game_framework.change_mode(title_mode)
+            game_framework.fade_to(title_mode)
             return
         elif event.type == SDL_KEYDOWN and event.key == SDLK_F1:
             show_bbs = not show_bbs
@@ -42,7 +42,6 @@ def update(frame_time):
 
 
 def draw():
-    clear_canvas()
     background.draw()
     # 카이가 창살 뒤(감방 안)에 있으면 창살이 카이를 가리도록 나중에 그림
     if kai.foot_y() > background.gate_base_y:
@@ -59,4 +58,3 @@ def draw():
         for o in game_world.objects:
             if hasattr(o, 'get_bb'):
                 draw_bb(o.get_bb())
-    update_canvas()
