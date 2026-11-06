@@ -23,7 +23,7 @@ FOOT_HEIGHT = 12
 # fire_attack: kai_animation_sheet.png의 6~7열을 재생하고, 7열로 넘어갈 때 파이어볼 발사
 ATTACK_COLS = (6, 7)
 ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
-ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초), 이 동안은 이동 불가
+ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초)
 FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 이만큼 떠서 날아감
 FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
 READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 손에 띄움
@@ -98,7 +98,6 @@ class Kai:
             return
         if event.type not in (SDL_KEYDOWN, SDL_KEYUP) or event.key not in KEY_DIRECTIONS:
             return
-        # 공격 중에도 키 상태는 기록해 두어야 공격이 끝난 뒤 바로 이어서 움직일 수 있음
         dx, dy = KEY_DIRECTIONS[event.key]
         sign = 1 if event.type == SDL_KEYDOWN else -1
         self.dir_x += dx * sign
@@ -135,11 +134,12 @@ class Kai:
             if not self.fired and self.attack_time >= ATTACK_FRAME_TIME:
                 self.launch_fireball()
                 self.fired = True
-            if self.attack_time < ATTACK_DURATION:
-                return
-        self.state = 'walk' if self.is_moving() else 'idle'
-        if self.state == 'walk':
-            self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
+        if self.state != 'fire_attack' or self.attack_time >= ATTACK_DURATION:
+            self.state = 'walk' if self.is_moving() else 'idle'
+        if self.is_moving():
+            # 공격 중에는 이동만 하고, 바라보는 방향은 공격 방향으로 유지
+            if self.state != 'fire_attack':
+                self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
             # x, y를 따로 움직이고 부딪힌 축만 되돌려서 벽을 따라 미끄러지듯 이동
             old_x = self.x
             self.x += self.dir_x * KAI_SPEED * frame_time
