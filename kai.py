@@ -158,14 +158,21 @@ class Kai:
             image, col = self.walk_image, int(self.anim_time * WALK_FPS) % WALK_FRAMES
         else:
             image, col = self.idle_image, int(self.anim_time * IDLE_FPS) % IDLE_FRAMES
+        # 뒤쪽(위)을 보고 있으면 손이 몸에 가려지므로 준비 표시를 카이보다 먼저 그림
+        facing_back = ROW_DIRECTIONS[self.row][1] > 0
+        if self.fire_ready and facing_back:
+            self.draw_ready_glow()
         # pico2d는 좌하단이 원점이므로 위에서부터의 행 번호를 뒤집어서 계산
         image.clip_draw(col * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                         FRAME_SIZE, FRAME_SIZE,
                         self.x, self.y, FRAME_SIZE * KAI_SCALE, FRAME_SIZE * KAI_SCALE)
-        if self.fire_ready:
-            # 바라보는 쪽 손 위치에 불꽃을 띄워 발사 준비 중임을 표시
-            dir_x, dir_y = ROW_DIRECTIONS[self.row]
-            length = math.hypot(dir_x, dir_y)
-            self.ready_image.clip_draw(0, 0, READY_GLOW_SIZE, READY_GLOW_SIZE,
-                                       self.x + dir_x / length * READY_GLOW_DISTANCE,
-                                       self.hand_y() + dir_y / length * READY_GLOW_DISTANCE)
+        if self.fire_ready and not facing_back:
+            self.draw_ready_glow()
+
+    def draw_ready_glow(self):
+        # 바라보는 쪽 손 위치에 불꽃을 띄워 발사 준비 중임을 표시
+        dir_x, dir_y = ROW_DIRECTIONS[self.row]
+        length = math.hypot(dir_x, dir_y)
+        self.ready_image.clip_draw(0, 0, READY_GLOW_SIZE, READY_GLOW_SIZE,
+                                   self.x + dir_x / length * READY_GLOW_DISTANCE,
+                                   self.hand_y() + dir_y / length * READY_GLOW_DISTANCE)
