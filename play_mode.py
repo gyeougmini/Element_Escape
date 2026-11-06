@@ -17,6 +17,10 @@ MOVE_NOTICE_HOLD = 2.0
 LIGHTS_OFF_DELAY = 3.0  # 안내가 사라지고 이 시간(초)이 지나면 조명이 꺼짐 (cell_dark_bg.png로 교체)
 # 정전과 동시에 나오는 ARC Lab 방송: 대화창이 떠 있는 동안은 플레이어 조작을 막음
 BLACKOUT_TEXT = '비상. 정전 발생.\n경계모드 활성화'
+# ARC Lab 대화창을 닫으면 나오는 안내: 이동 안내와 같은 방식으로 입력을 막고 보여줌
+FIRE_NOTICE_TEXT = '불 공격: Q'
+FIRE_NOTICE_DELAY = 0.3
+FIRE_NOTICE_HOLD = 2.0
 DIALOGUE_SCALE = 1.5
 DIALOGUE_MARGIN = 40  # 화면 오른쪽 아래 모서리에서 대화창까지의 거리
 
@@ -51,7 +55,7 @@ def finish():
 
 
 def handle_events():
-    global show_bbs, dialogue
+    global show_bbs, dialogue, notice
     for event in get_events():
         if event.type == SDL_QUIT:
             game_framework.quit()
@@ -62,6 +66,7 @@ def handle_events():
             if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
                 if dialogue.is_complete():
                     dialogue = None
+                    notice = Notice(FIRE_NOTICE_TEXT, FIRE_NOTICE_HOLD, FIRE_NOTICE_DELAY)
                 else:
                     dialogue.show_all()
         elif event.type == SDL_KEYDOWN and event.key == SDLK_ESCAPE:
