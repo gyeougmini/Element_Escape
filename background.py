@@ -38,7 +38,10 @@ OBSTACLES = [
 
 class Background:
     def __init__(self, width, height):
-        self.image = load_image('sprite_sheet_bg/cell_bg.png')
+        self.light_image = load_image('sprite_sheet_bg/cell_bg.png')
+        # 배치는 같고 조명만 꺼진 버전: 충돌 박스는 그대로 사용
+        self.dark_image = load_image('sprite_sheet_bg/cell_dark_bg.png')
+        self.image = self.light_image
         # cell_bg.png와 같은 크기(1024x768)의 투명 이미지로, 창살이 감방 경계에 맞춰 그려져 있음
         self.gate_image = load_image('sprit_sheet_object/bars_gate.png')
         self.width, self.height = width, height
@@ -55,6 +58,9 @@ class Background:
     def to_canvas_y(self, image_y):
         # 이미지는 위에서부터, pico2d는 아래에서부터 y를 셈
         return (BG_IMAGE_HEIGHT - image_y) * self.height / BG_IMAGE_HEIGHT
+
+    def set_dark(self, dark):
+        self.image = self.dark_image if dark else self.light_image
 
     def get_bbs(self):
         return self.bbs

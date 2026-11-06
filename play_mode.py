@@ -13,11 +13,13 @@ KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' �
 MOVE_NOTICE_TEXT = '플레이어 이동: WASD'
 MOVE_NOTICE_DELAY = 0.5  # game_framework.FADE_TIME과 같게 해서 화면이 다 밝아진 뒤 등장
 MOVE_NOTICE_HOLD = 2.0
+LIGHTS_OFF_DELAY = 3.0  # 안내가 사라지고 이 시간(초)이 지나면 조명이 꺼짐 (cell_dark_bg.png로 교체)
 
 
 def init():
-    global background, kai, notice
+    global background, kai, notice, after_notice_time
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
+    after_notice_time = 0.0
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
     kai = Kai(0, 0)
@@ -48,7 +50,12 @@ def handle_events():
 
 
 def update(frame_time):
+    global after_notice_time
     notice.update(frame_time)
+    if notice.is_done():
+        after_notice_time += frame_time
+        if after_notice_time >= LIGHTS_OFF_DELAY:
+            background.set_dark(True)
     kai.update(frame_time, background.get_bbs())
     game_world.update(frame_time)
 
