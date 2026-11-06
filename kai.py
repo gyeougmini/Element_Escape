@@ -89,6 +89,11 @@ class Kai:
         # 파이어볼이 나가는 손의 화면상 높이
         return self.foot_y() + FOOT_HEIGHT / 2 + FIRE_HEIGHT
 
+    def stop(self):
+        # 대화 등으로 조작을 막을 때: 눌려 있던 방향키를 잊고 멈춤
+        self.pressed_keys.clear()
+        self.dir_x, self.dir_y = 0, 0
+
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)
 
