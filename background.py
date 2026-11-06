@@ -38,9 +38,9 @@ OBSTACLES = [
 
 class Background:
     def __init__(self, width, height):
-        self.image = load_image('sprite_sheet/cell_bg.png')
+        self.image = load_image('sprite_sheet_bg/cell_bg.png')
         # cell_bg.png와 같은 크기(1024x768)의 투명 이미지로, 창살이 감방 경계에 맞춰 그려져 있음
-        self.gate_image = load_image('sprite_sheet/bars_gate.png')
+        self.gate_image = load_image('sprit_sheet_object/bars_gate.png')
         self.width, self.height = width, height
         # 창살 아래쪽 끝의 캔버스 y 좌표: 이보다 위에 발이 있으면 감방 안(창살 뒤)
         self.gate_base_y = self.to_canvas_y(GATE_BASE_IMAGE_Y)

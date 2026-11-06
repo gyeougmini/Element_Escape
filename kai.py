@@ -55,9 +55,9 @@ KEY_DIRECTIONS = {
 
 class Kai:
     def __init__(self, x, y):
-        self.walk_image = load_image('sprite_sheet/kai_animation_sheet.png')
-        self.idle_image = load_image('sprite_sheet/kai_idle.png')
-        self.ready_image = load_image('sprite_sheet/fire_launch.png')
+        self.walk_image = load_image('sprite_sheet_kai/kai_animation_sheet.png')
+        self.idle_image = load_image('sprite_sheet_kai/kai_idle.png')
+        self.ready_image = load_image('sprite_sheet_fire/fire_launch.png')
         self.x, self.y = x, y
         self.dir_x, self.dir_y = 0, 0
         self.row = 0
