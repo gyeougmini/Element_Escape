@@ -73,6 +73,11 @@ class Kai:
         # 프레임 아래쪽 끝을 발 위치로 사용
         return self.y - FRAME_SIZE * KAI_SCALE / 2
 
+    def place_feet_at(self, x, y):
+        # 발 충돌 박스의 중심이 (x, y)에 오도록 위치를 맞춤
+        self.x = x
+        self.y = y + FRAME_SIZE * KAI_SCALE / 2 - FOOT_HEIGHT / 2
+
     def get_bb(self):
         foot_y = self.foot_y()
         return (self.x - FOOT_HALF_WIDTH, foot_y,

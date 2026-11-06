@@ -7,13 +7,16 @@ from collision import draw_bb
 from kai import Kai
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
+KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' 글자 (위에서부터의 픽셀 좌표)
 
 
 def init():
     global background, kai
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
-    kai = Kai(width // 2, height // 2)
+    kai = Kai(0, 0)
+    start_x, start_y = KAI_START_IMAGE_POS
+    kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     game_world.obstacles = background.get_obstacles()
 
 
