@@ -60,6 +60,8 @@ class Kai:
         self.ready_image = load_image('sprite_sheet_fire/fire_launch.png')
         self.x, self.y = x, y
         self.dir_x, self.dir_y = 0, 0
+        # 눌려 있는 방향키: 눌림을 못 받은 키의 뗌 신호가 와도 방향이 틀어지지 않도록 직접 기록
+        self.pressed_keys = set()
         self.row = 0
         self.anim_time = 0.0
         self.state = 'idle'  # 'idle', 'walk', 'fire_attack'
@@ -103,10 +105,12 @@ class Kai:
             return
         if event.type not in (SDL_KEYDOWN, SDL_KEYUP) or event.key not in KEY_DIRECTIONS:
             return
-        dx, dy = KEY_DIRECTIONS[event.key]
-        sign = 1 if event.type == SDL_KEYDOWN else -1
-        self.dir_x += dx * sign
-        self.dir_y += dy * sign
+        if event.type == SDL_KEYDOWN:
+            self.pressed_keys.add(event.key)
+        else:
+            self.pressed_keys.discard(event.key)
+        self.dir_x = sum(KEY_DIRECTIONS[key][0] for key in self.pressed_keys)
+        self.dir_y = sum(KEY_DIRECTIONS[key][1] for key in self.pressed_keys)
 
     def aim_at(self, target_x, target_y):
         dx, dy = target_x - self.x, target_y - self.hand_y()

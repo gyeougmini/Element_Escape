@@ -5,13 +5,19 @@ import game_world
 from background import Background
 from collision import draw_bb
 from kai import Kai
+from notice import Notice
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' 글자 (위에서부터의 픽셀 좌표)
+# 시작 안내: 화면이 밝아진 뒤 나타나고, 안내가 사라질 때까지 모든 입력을 막음
+MOVE_NOTICE_TEXT = '플레이어 이동: WASD'
+MOVE_NOTICE_DELAY = 0.5  # game_framework.FADE_TIME과 같게 해서 화면이 다 밝아진 뒤 등장
+MOVE_NOTICE_HOLD = 2.0
 
 
 def init():
-    global background, kai
+    global background, kai, notice
+    notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
     kai = Kai(0, 0)
@@ -29,6 +35,8 @@ def handle_events():
     for event in get_events():
         if event.type == SDL_QUIT:
             game_framework.quit()
+        elif not notice.is_done():
+            continue  # 안내 중에는 키보드/마우스 입력을 모두 무시
         elif event.type == SDL_KEYDOWN and event.key == SDLK_ESCAPE:
             import title_mode  # title_mode가 play_mode를 import하므로 순환 import를 피해 여기서 불러옴
             game_framework.fade_to(title_mode)
@@ -40,6 +48,7 @@ def handle_events():
 
 
 def update(frame_time):
+    notice.update(frame_time)
     kai.update(frame_time, background.get_bbs())
     game_world.update(frame_time)
 
@@ -55,6 +64,7 @@ def draw():
         kai.draw()
     # 파이어볼과 불꽃 이펙트는 항상 맨 위에 그림
     game_world.draw()
+    notice.draw()
     if show_bbs:
         background.draw_bbs()
         draw_bb(kai.get_bb())
