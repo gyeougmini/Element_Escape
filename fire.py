@@ -10,9 +10,9 @@ FIREBALL_FPS = 12
 FIREBALL_FRAMES = 4
 FIREBALL_SIZE = 64       # fireball_sheet.png: 4열 x 8행, 프레임 64x64
 FIREBALL_SHEET_HEIGHT = 512
-# 바닥 기준 충돌 박스 크기 (벽/물체 충돌 박스가 바닥 면적이므로 같은 기준으로 판정)
-FIREBALL_HALF_WIDTH = 8
-FIREBALL_HALF_HEIGHT = 4
+# 충돌 박스는 이미지의 불덩이(꼬리 제외) 부분: 지름 약 18px, 프레임 중심에서 진행 방향으로 약 3px 앞
+FIREBALL_BB_HALF_SIZE = 9
+FIREBALL_BB_FORWARD = 3
 
 LAUNCH_SIZE = 64         # fire_launch.png: 3프레임, 64x64
 LAUNCH_FRAMES = 3
@@ -35,24 +35,26 @@ FIREBALL_ROW_COUNT = 8
 class Fireball:
     image = None
 
-    def __init__(self, ground_x, ground_y, height, dir_x, dir_y):
+    def __init__(self, x, y, dir_x, dir_y):
         if Fireball.image is None:
             Fireball.image = load_image('sprite_sheet/fireball_sheet.png')
-        # 바닥 위치(ground)로 이동/충돌을 계산하고, height만큼 띄워서 그림
-        self.x, self.y = ground_x, ground_y
-        self.height = height
+        # (x, y)는 이미지가 그려지는 중심
+        self.x, self.y = x, y
         # 날아가는 각도에 가장 가까운 45도 방향의 행을 사용
         angle = math.degrees(math.atan2(dir_y, dir_x))
         self.row = round(angle / 45) % FIREBALL_ROW_COUNT
         length = math.hypot(dir_x, dir_y)
-        self.vx = dir_x / length * FIREBALL_SPEED
-        self.vy = dir_y / length * FIREBALL_SPEED
+        self.dir_x, self.dir_y = dir_x / length, dir_y / length
+        self.vx = self.dir_x * FIREBALL_SPEED
+        self.vy = self.dir_y * FIREBALL_SPEED
         self.anim_time = 0.0
         self.alive = True
 
     def get_bb(self):
-        return (self.x - FIREBALL_HALF_WIDTH, self.y - FIREBALL_HALF_HEIGHT,
-                self.x + FIREBALL_HALF_WIDTH, self.y + FIREBALL_HALF_HEIGHT)
+        cx = self.x + self.dir_x * FIREBALL_BB_FORWARD
+        cy = self.y + self.dir_y * FIREBALL_BB_FORWARD
+        return (cx - FIREBALL_BB_HALF_SIZE, cy - FIREBALL_BB_HALF_SIZE,
+                cx + FIREBALL_BB_HALF_SIZE, cy + FIREBALL_BB_HALF_SIZE)
 
     def update(self, frame_time):
         self.anim_time += frame_time
@@ -65,16 +67,15 @@ class Fireball:
 
     def hit(self, burnable):
         self.alive = False
-        draw_y = self.y + self.height
-        game_world.add(FireImpact(self.x, draw_y))
+        game_world.add(FireImpact(self.x, self.y))
         if burnable:
-            game_world.add(Burning(self.x, draw_y))
+            game_world.add(Burning(self.x, self.y))
 
     def draw(self):
         col = int(self.anim_time * FIREBALL_FPS) % FIREBALL_FRAMES
         Fireball.image.clip_draw(col * FIREBALL_SIZE,
                                  FIREBALL_SHEET_HEIGHT - (self.row + 1) * FIREBALL_SIZE,
-                                 FIREBALL_SIZE, FIREBALL_SIZE, self.x, self.y + self.height)
+                                 FIREBALL_SIZE, FIREBALL_SIZE, self.x, self.y)
 
 
 class OneShotEffect:

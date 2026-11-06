@@ -24,7 +24,7 @@ FOOT_HEIGHT = 12
 ATTACK_COLS = (6, 7)
 ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
 ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초)
-FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 이만큼 떠서 날아감
+FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 손 높이에서 나감
 FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
 READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 손에 띄움
 READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
@@ -122,10 +122,10 @@ class Kai:
     def launch_fireball(self):
         # 클릭한 방향(fire_dir)으로 발사
         dir_x, dir_y = self.fire_dir
-        ground_x = self.x + dir_x * FIRE_SPAWN_DISTANCE
-        ground_y = self.foot_y() + FOOT_HEIGHT / 2 + dir_y * FIRE_SPAWN_DISTANCE
-        game_world.add(Fireball(ground_x, ground_y, FIRE_HEIGHT, dir_x, dir_y))
-        game_world.add(FireLaunch(ground_x, ground_y + FIRE_HEIGHT))
+        spawn_x = self.x + dir_x * FIRE_SPAWN_DISTANCE
+        spawn_y = self.hand_y() + dir_y * FIRE_SPAWN_DISTANCE
+        game_world.add(Fireball(spawn_x, spawn_y, dir_x, dir_y))
+        game_world.add(FireLaunch(spawn_x, spawn_y))
 
     def update(self, frame_time, obstacles):
         self.anim_time += frame_time
