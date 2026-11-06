@@ -1,7 +1,7 @@
 from pico2d import *
 
 import game_framework
-import play_mode
+import intro_mode
 from button import Button
 
 START_BUTTON_Y = 200
@@ -10,7 +10,7 @@ OPTION_BUTTON_MARGIN = 50  # 오른쪽 위 모서리에서 설정 버튼 중심�
 
 
 def start_game():
-    game_framework.fade_to(play_mode)
+    game_framework.fade_to(intro_mode)
 
 
 def open_option():
