@@ -1,6 +1,10 @@
+import math
+
 from pico2d import *
 
+import game_world
 from collision import collide_any
+from fire import Fireball, FireLaunch
 
 # 두 시트 모두 프레임 64x64, 8행(방향)이며 높이 512
 # kai_animation_sheet.png: 9열 (0~5열 걷기), kai_idle.png: 2열
@@ -16,6 +20,13 @@ KAI_SPEED = 200  # 초당 이동 픽셀
 FOOT_HALF_WIDTH = 15
 FOOT_HEIGHT = 12
 
+# fire_attack: kai_animation_sheet.png의 6~7열을 재생하고, 7열로 넘어갈 때 파이어볼 발사
+ATTACK_COLS = (6, 7)
+ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
+ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초), 이 동안은 이동 불가
+FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 이만큼 떠서 날아감
+FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
+
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터)
 DIRECTION_ROWS = {
     (0, -1): 0,   # 정면
@@ -27,6 +38,7 @@ DIRECTION_ROWS = {
     (-1, 0): 6,   # 왼쪽
     (-1, -1): 7,  # 왼쪽 아래
 }
+ROW_DIRECTIONS = {row: direction for direction, row in DIRECTION_ROWS.items()}
 
 # 키 -> (dir_x, dir_y) 변화량
 KEY_DIRECTIONS = {
@@ -45,6 +57,9 @@ class Kai:
         self.dir_x, self.dir_y = 0, 0
         self.row = 0
         self.anim_time = 0.0
+        self.state = 'idle'  # 'idle', 'walk', 'fire_attack'
+        self.attack_time = 0.0
+        self.fired = False
 
     def foot_y(self):
         # 프레임 아래쪽 끝을 발 위치로 사용
@@ -59,16 +74,43 @@ class Kai:
         return (self.dir_x, self.dir_y) != (0, 0)
 
     def handle_event(self, event):
+        if event.type == SDL_KEYDOWN and event.key == SDLK_q:
+            if self.state != 'fire_attack':
+                self.start_fire_attack()
+            return
         if event.type not in (SDL_KEYDOWN, SDL_KEYUP) or event.key not in KEY_DIRECTIONS:
             return
+        # 공격 중에도 키 상태는 기록해 두어야 공격이 끝난 뒤 바로 이어서 움직일 수 있음
         dx, dy = KEY_DIRECTIONS[event.key]
         sign = 1 if event.type == SDL_KEYDOWN else -1
         self.dir_x += dx * sign
         self.dir_y += dy * sign
 
+    def start_fire_attack(self):
+        self.state = 'fire_attack'
+        self.attack_time = 0.0
+        self.fired = False
+
+    def launch_fireball(self):
+        # 지금 바라보는 방향으로 발사
+        dir_x, dir_y = ROW_DIRECTIONS[self.row]
+        length = math.hypot(dir_x, dir_y)
+        ground_x = self.x + dir_x / length * FIRE_SPAWN_DISTANCE
+        ground_y = self.foot_y() + FOOT_HEIGHT / 2 + dir_y / length * FIRE_SPAWN_DISTANCE
+        game_world.add(Fireball(ground_x, ground_y, FIRE_HEIGHT, dir_x, dir_y))
+        game_world.add(FireLaunch(ground_x, ground_y + FIRE_HEIGHT))
+
     def update(self, frame_time, obstacles):
         self.anim_time += frame_time
-        if self.is_moving():
+        if self.state == 'fire_attack':
+            self.attack_time += frame_time
+            if not self.fired and self.attack_time >= ATTACK_FRAME_TIME:
+                self.launch_fireball()
+                self.fired = True
+            if self.attack_time < ATTACK_DURATION:
+                return
+        self.state = 'walk' if self.is_moving() else 'idle'
+        if self.state == 'walk':
             self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
             # x, y를 따로 움직이고 부딪힌 축만 되돌려서 벽을 따라 미끄러지듯 이동
             old_x = self.x
@@ -81,7 +123,10 @@ class Kai:
                 self.y = old_y
 
     def draw(self):
-        if self.is_moving():
+        if self.state == 'fire_attack':
+            attack_frame = min(int(self.attack_time / ATTACK_FRAME_TIME), len(ATTACK_COLS) - 1)
+            image, col = self.walk_image, ATTACK_COLS[attack_frame]
+        elif self.state == 'walk':
             image, col = self.walk_image, int(self.anim_time * WALK_FPS) % WALK_FRAMES
         else:
             image, col = self.idle_image, int(self.anim_time * IDLE_FPS) % IDLE_FRAMES

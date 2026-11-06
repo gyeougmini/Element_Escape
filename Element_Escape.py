@@ -2,6 +2,7 @@ import os
 
 from pico2d import *
 
+import game_world
 from background import Background
 from collision import draw_bb
 from kai import Kai
@@ -33,6 +34,7 @@ open_canvas(WIDTH, HEIGHT)
 
 background = Background(WIDTH, HEIGHT)
 kai = Kai(WIDTH // 2, HEIGHT // 2)
+game_world.obstacles = background.get_obstacles()
 
 last_time = get_time()
 
@@ -44,6 +46,7 @@ while running:
     last_time = now
 
     kai.update(frame_time, background.get_bbs())
+    game_world.update(frame_time)
 
     clear_canvas()
     background.draw()
@@ -54,9 +57,14 @@ while running:
     else:
         background.draw_gate()
         kai.draw()
+    # 파이어볼과 불꽃 이펙트는 항상 맨 위에 그림
+    game_world.draw()
     if show_bbs:
         background.draw_bbs()
         draw_bb(kai.get_bb())
+        for o in game_world.objects:
+            if hasattr(o, 'get_bb'):
+                draw_bb(o.get_bb())
     update_canvas()
     delay(0.01)
 
