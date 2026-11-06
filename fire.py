@@ -27,17 +27,9 @@ BURNING_FRAMES = 4
 BURNING_FPS = 8
 BURNING_DURATION = 3.0   # 초
 
-# (dir_x, dir_y) -> fireball_sheet.png 행 번호 (위에서부터)
-FIREBALL_ROWS = {
-    (1, 0): 0,    # 오른쪽
-    (1, 1): 1,    # 오른쪽 위
-    (0, 1): 2,    # 위
-    (-1, 1): 3,   # 왼쪽 위
-    (-1, 0): 4,   # 왼쪽
-    (-1, -1): 5,  # 왼쪽 아래
-    (0, -1): 6,   # 아래
-    (1, -1): 7,   # 오른쪽 아래
-}
+# fireball_sheet.png 행은 오른쪽(0행)부터 반시계 방향으로 45도씩:
+# 오른쪽, 오른쪽 위, 위, 왼쪽 위, 왼쪽, 왼쪽 아래, 아래, 오른쪽 아래
+FIREBALL_ROW_COUNT = 8
 
 
 class Fireball:
@@ -49,7 +41,9 @@ class Fireball:
         # 바닥 위치(ground)로 이동/충돌을 계산하고, height만큼 띄워서 그림
         self.x, self.y = ground_x, ground_y
         self.height = height
-        self.row = FIREBALL_ROWS[(dir_x, dir_y)]
+        # 날아가는 각도에 가장 가까운 45도 방향의 행을 사용
+        angle = math.degrees(math.atan2(dir_y, dir_x))
+        self.row = round(angle / 45) % FIREBALL_ROW_COUNT
         length = math.hypot(dir_x, dir_y)
         self.vx = dir_x / length * FIREBALL_SPEED
         self.vy = dir_y / length * FIREBALL_SPEED

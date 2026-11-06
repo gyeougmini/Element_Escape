@@ -26,6 +26,8 @@ ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
 ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초), 이 동안은 이동 불가
 FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 이만큼 떠서 날아감
 FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
+READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 손에 띄움
+READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
 
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터)
 DIRECTION_ROWS = {
@@ -39,6 +41,8 @@ DIRECTION_ROWS = {
     (-1, -1): 7,  # 왼쪽 아래
 }
 ROW_DIRECTIONS = {row: direction for direction, row in DIRECTION_ROWS.items()}
+# 오른쪽부터 반시계 방향으로 45도씩의 8방향: 임의의 방향을 가장 가까운 8방향으로 맞출 때 사용
+OCTANT_DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
 
 # 키 -> (dir_x, dir_y) 변화량
 KEY_DIRECTIONS = {
@@ -53,6 +57,7 @@ class Kai:
     def __init__(self, x, y):
         self.walk_image = load_image('sprite_sheet/kai_animation_sheet.png')
         self.idle_image = load_image('sprite_sheet/kai_idle.png')
+        self.ready_image = load_image('sprite_sheet/fire_launch.png')
         self.x, self.y = x, y
         self.dir_x, self.dir_y = 0, 0
         self.row = 0
@@ -60,6 +65,9 @@ class Kai:
         self.state = 'idle'  # 'idle', 'walk', 'fire_attack'
         self.attack_time = 0.0
         self.fired = False
+        # Q로 켜는 발사 준비 상태: 준비 중에도 걷거나 멈춰 있을 수 있으므로 state와 따로 관리
+        self.fire_ready = False
+        self.fire_dir = (0, -1)  # 파이어볼이 날아갈 방향 (길이 1)
 
     def foot_y(self):
         # 프레임 아래쪽 끝을 발 위치로 사용
@@ -70,13 +78,23 @@ class Kai:
         return (self.x - FOOT_HALF_WIDTH, foot_y,
                 self.x + FOOT_HALF_WIDTH, foot_y + FOOT_HEIGHT)
 
+    def hand_y(self):
+        # 파이어볼이 나가는 손의 화면상 높이
+        return self.foot_y() + FOOT_HEIGHT / 2 + FIRE_HEIGHT
+
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)
 
     def handle_event(self, event):
         if event.type == SDL_KEYDOWN and event.key == SDLK_q:
+            # 발사 준비 토글: 한 번 더 누르면 취소
             if self.state != 'fire_attack':
-                self.start_fire_attack()
+                self.fire_ready = not self.fire_ready
+            return
+        if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
+            if self.fire_ready:
+                # SDL 마우스 좌표는 위에서부터이므로 pico2d 좌표로 뒤집음
+                self.aim_at(event.x, get_canvas_height() - 1 - event.y)
             return
         if event.type not in (SDL_KEYDOWN, SDL_KEYUP) or event.key not in KEY_DIRECTIONS:
             return
@@ -86,17 +104,27 @@ class Kai:
         self.dir_x += dx * sign
         self.dir_y += dy * sign
 
+    def aim_at(self, target_x, target_y):
+        dx, dy = target_x - self.x, target_y - self.hand_y()
+        length = math.hypot(dx, dy)
+        if length == 0:
+            return
+        self.fire_dir = (dx / length, dy / length)
+        # 클릭한 쪽에 가장 가까운 8방향을 바라보게 함
+        octant = round(math.degrees(math.atan2(dy, dx)) / 45) % 8
+        self.row = DIRECTION_ROWS[OCTANT_DIRECTIONS[octant]]
+        self.start_fire_attack()
+
     def start_fire_attack(self):
         self.state = 'fire_attack'
         self.attack_time = 0.0
         self.fired = False
 
     def launch_fireball(self):
-        # 지금 바라보는 방향으로 발사
-        dir_x, dir_y = ROW_DIRECTIONS[self.row]
-        length = math.hypot(dir_x, dir_y)
-        ground_x = self.x + dir_x / length * FIRE_SPAWN_DISTANCE
-        ground_y = self.foot_y() + FOOT_HEIGHT / 2 + dir_y / length * FIRE_SPAWN_DISTANCE
+        # 클릭한 방향(fire_dir)으로 발사
+        dir_x, dir_y = self.fire_dir
+        ground_x = self.x + dir_x * FIRE_SPAWN_DISTANCE
+        ground_y = self.foot_y() + FOOT_HEIGHT / 2 + dir_y * FIRE_SPAWN_DISTANCE
         game_world.add(Fireball(ground_x, ground_y, FIRE_HEIGHT, dir_x, dir_y))
         game_world.add(FireLaunch(ground_x, ground_y + FIRE_HEIGHT))
 
@@ -134,3 +162,10 @@ class Kai:
         image.clip_draw(col * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                         FRAME_SIZE, FRAME_SIZE,
                         self.x, self.y, FRAME_SIZE * KAI_SCALE, FRAME_SIZE * KAI_SCALE)
+        if self.fire_ready:
+            # 바라보는 쪽 손 위치에 불꽃을 띄워 발사 준비 중임을 표시
+            dir_x, dir_y = ROW_DIRECTIONS[self.row]
+            length = math.hypot(dir_x, dir_y)
+            self.ready_image.clip_draw(0, 0, READY_GLOW_SIZE, READY_GLOW_SIZE,
+                                       self.x + dir_x / length * READY_GLOW_DISTANCE,
+                                       self.hand_y() + dir_y / length * READY_GLOW_DISTANCE)
