@@ -27,6 +27,7 @@ KNOCKBACK_TIME = 0.25
 HIT_COL = 9  # 맞았을 때 프레임
 
 RAT_HP = 30
+RAT_DAMAGE = 5  # 카이와 부딪혔을 때 카이에게 주는 피해
 # HP가 0이 되면 밀려난 뒤 기절 프레임(10~11열)을 보여주다가 사라짐
 DEATH_COLS = (10, 11)
 DEATH_FPS = 4
@@ -95,6 +96,19 @@ class Rat:
 
     def is_knocked_back(self):
         return self.knockback_time > 0
+
+    def touch(self, target):
+        """target(카이)과 발이 부딪혔으면 쥐 반대쪽으로 밀어내며 피해를 줌"""
+        if self.is_dead() or self.is_knocked_back() or not collide(self.get_bb(), target.get_bb()):
+            return
+        x, y = bb_center(self.get_bb())
+        tx, ty = bb_center(target.get_bb())
+        length = math.hypot(tx - x, ty - y)
+        if length == 0:
+            dir_x, dir_y = 0, -1  # 정확히 겹쳐 있으면 아래로 밀어냄
+        else:
+            dir_x, dir_y = (tx - x) / length, (ty - y) / length
+        target.on_hit(dir_x, dir_y, RAT_DAMAGE)
 
     def start_idle(self):
         self.dir_x, self.dir_y = 0, 0
