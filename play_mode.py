@@ -3,7 +3,7 @@ from pico2d import *
 import game_framework
 import game_world
 from background import Background
-from collision import draw_bb
+from collision import draw_bb, push_out_offset
 from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
 from gate import Gate
 from kai import Kai
@@ -118,6 +118,12 @@ def update(frame_time):
         dialogue.update(frame_time)
     gate.update(frame_time)
     update_obstacles()
+    # 문이 열리며 생긴 문짝 박스처럼 캐릭터가 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
+    for actor in [kai] + rats:
+        offset = push_out_offset(actor.get_bb(), obstacle_bbs())
+        if offset:
+            actor.x += offset[0]
+            actor.y += offset[1]
     kai.update(frame_time, obstacle_bbs())
     # 철창 문이 열리기 전에는 쥐가 카이를 추적하지 않고 돌아다니기만 함
     chase_target = kai if gate.is_open() else None
