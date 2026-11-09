@@ -6,6 +6,7 @@ from background import Background
 from collision import draw_bb, push_out_offset
 from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
 from gate import Gate
+from hud import ElementHud
 from kai import Kai
 from notice import Notice
 from rat import spawn_rats
@@ -54,7 +55,8 @@ def obstacle_bbs():
 
 
 def init():
-    global background, gate, kai, rats, notice, after_notice_time, lights_off, dialogue
+    global background, gate, kai, rats, hud, notice, after_notice_time, lights_off, dialogue
+    hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
     lights_off = False
@@ -150,6 +152,7 @@ def draw():
             actor.draw()
     # 파이어볼과 불꽃 이펙트는 항상 맨 위에 그림
     game_world.draw()
+    hud.draw(kai.active_elements())
     notice.draw()
     if dialogue:
         dialogue.draw()

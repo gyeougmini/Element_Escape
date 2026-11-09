@@ -78,6 +78,9 @@ class Kai:
         # Q로 켜는 발사 준비 상태: 준비 중에도 걷거나 멈춰 있을 수 있으므로 state와 따로 관리
         self.fire_ready = False
         self.fire_dir = (0, -1)  # 파이어볼이 날아갈 방향 (길이 1)
+        # E/R로 켜는 물/전기 준비 상태 (아직 공격은 없고 HUD 표시만)
+        self.water_ready = False
+        self.electric_ready = False
         self.hp = KAI_HP
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
@@ -109,6 +112,11 @@ class Kai:
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)
 
+    def active_elements(self):
+        # HUD에 켜서 보여줄 속성들
+        ready = {'fire': self.fire_ready, 'water': self.water_ready, 'electric': self.electric_ready}
+        return {name for name, on in ready.items() if on}
+
     def is_invincible(self):
         return self.invincible_time > 0
 
@@ -138,6 +146,12 @@ class Kai:
             # 발사 준비 토글: 한 번 더 누르면 취소
             if self.state != 'fire_attack':
                 self.fire_ready = not self.fire_ready
+            return
+        if event.type == SDL_KEYDOWN and event.key == SDLK_e:
+            self.water_ready = not self.water_ready
+            return
+        if event.type == SDL_KEYDOWN and event.key == SDLK_r:
+            self.electric_ready = not self.electric_ready
             return
         if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if self.fire_ready:
