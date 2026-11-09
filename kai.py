@@ -30,6 +30,8 @@ READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 
 READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
 
 KAI_HP = 100
+KAI_ENERGY = 100
+FIRE_ENERGY_COST = 10  # 파이어볼 한 발에 쓰는 에너지
 # 쥐에게 부딪히면 반대 방향으로 밀려남: 처음 속도에서 0까지 줄어들며 약 60px 이동
 KNOCKBACK_SPEED = 480
 KNOCKBACK_TIME = 0.25
@@ -81,7 +83,8 @@ class Kai:
         # E/R로 켜는 물/전기 준비 상태 (아직 공격은 없고 HUD 표시만)
         self.water_ready = False
         self.electric_ready = False
-        self.hp = KAI_HP
+        self.max_hp = self.hp = KAI_HP
+        self.max_energy = self.energy = KAI_ENERGY
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
         self.invincible_time = 0.0
@@ -168,10 +171,14 @@ class Kai:
         self.dir_y = sum(KEY_DIRECTIONS[key][1] for key in self.pressed_keys)
 
     def aim_at(self, target_x, target_y):
+        # 공격 중이거나 에너지가 모자라면 쏘지 않음
+        if self.state == 'fire_attack' or self.energy < FIRE_ENERGY_COST:
+            return
         dx, dy = target_x - self.x, target_y - self.hand_y()
         length = math.hypot(dx, dy)
         if length == 0:
             return
+        self.energy -= FIRE_ENERGY_COST
         self.fire_dir = (dx / length, dy / length)
         # 클릭한 쪽에 가장 가까운 8방향을 바라보게 함
         octant = round(math.degrees(math.atan2(dy, dx)) / 45) % 8

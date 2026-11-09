@@ -136,6 +136,7 @@ def update(frame_time):
     rats[:] = [rat for rat in rats if rat.alive]
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
     game_world.update(frame_time)
+    hud.update(frame_time, kai)
 
 
 def draw():
