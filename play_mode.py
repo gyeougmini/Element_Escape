@@ -70,10 +70,12 @@ def init():
               background.to_canvas_x(right), background.to_canvas_y(top))
              for left, top, right, bottom in RAT_AREAS]
     rats = spawn_rats(RAT_COUNT, areas, obstacle_bbs())
+    game_world.hittables = rats
 
 
 def finish():
     game_world.objects.clear()
+    game_world.hittables = []
 
 
 def handle_events():
@@ -145,6 +147,7 @@ def draw():
         draw_bb(kai.get_bb())
         for rat in rats:
             draw_bb(rat.get_bb())
+            draw_bb(rat.get_hit_bb())
         for o in game_world.objects:
             if hasattr(o, 'get_bb'):
                 draw_bb(o.get_bb())

@@ -18,6 +18,14 @@ FOOT_OFFSET = 24      # 그림 중심에서 발 아래쪽 끝까지의 거리
 FOOT_HALF_WIDTH = 12
 FOOT_HEIGHT = 10
 
+# 파이어볼에 맞는 몸통 박스: 그림 중심 기준. 파이어볼이 카이의 손 높이로 날아오므로 위쪽을 넉넉하게 잡음
+HIT_HALF_WIDTH = 18
+HIT_BOTTOM, HIT_TOP = -22, 22
+# 파이어볼에 맞으면 날아온 방향으로 밀려남: 처음 속도에서 0까지 줄어들며 약 40px 이동
+KNOCKBACK_SPEED = 320
+KNOCKBACK_TIME = 0.25
+HIT_COL = 9  # 맞았을 때 프레임
+
 IDLE_TIME = (0.5, 2.0)  # 멈춰 있는 시간 범위(초)
 WALK_TIME = (1.0, 3.0)  # 한 방향으로 걷는 시간 범위(초)
 
@@ -39,6 +47,8 @@ class Rat:
         self.row = random.randint(0, 7)
         self.dir_x, self.dir_y = 0, 0
         self.anim_time = random.random()  # 쥐마다 걷는 박자가 어긋나도록
+        self.knockback_dir = (0, 0)
+        self.knockback_time = 0.0
         self.start_idle()
 
     def foot_y(self):
@@ -48,6 +58,18 @@ class Rat:
         foot_y = self.foot_y()
         return (self.x - FOOT_HALF_WIDTH, foot_y,
                 self.x + FOOT_HALF_WIDTH, foot_y + FOOT_HEIGHT)
+
+    def get_hit_bb(self):
+        return (self.x - HIT_HALF_WIDTH, self.y + HIT_BOTTOM,
+                self.x + HIT_HALF_WIDTH, self.y + HIT_TOP)
+
+    def on_fireball_hit(self, dir_x, dir_y):
+        # dir: 파이어볼이 날아온 방향(길이 1). 맞은 반대편, 즉 파이어볼 진행 방향으로 밀려남
+        self.knockback_dir = (dir_x, dir_y)
+        self.knockback_time = KNOCKBACK_TIME
+
+    def is_knocked_back(self):
+        return self.knockback_time > 0
 
     def start_idle(self):
         self.dir_x, self.dir_y = 0, 0
@@ -61,8 +83,27 @@ class Rat:
     def is_moving(self):
         return (self.dir_x, self.dir_y) != (0, 0)
 
+    def update_knockback(self, frame_time, obstacles):
+        # 남은 시간에 비례해 속도가 줄어듦. 벽에 막힌 축은 더 밀리지 않음
+        speed = KNOCKBACK_SPEED * self.knockback_time / KNOCKBACK_TIME
+        dx, dy = self.knockback_dir
+        old_x = self.x
+        self.x += dx * speed * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.x = old_x
+        old_y = self.y
+        self.y += dy * speed * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.y = old_y
+        self.knockback_time -= frame_time
+        if not self.is_knocked_back():
+            self.start_idle()
+
     def update(self, frame_time, obstacles):
         self.anim_time += frame_time
+        if self.is_knocked_back():
+            self.update_knockback(frame_time, obstacles)
+            return
         self.state_time -= frame_time
         if self.state_time <= 0:
             if self.is_moving():
@@ -81,7 +122,12 @@ class Rat:
             self.start_walk()
 
     def draw(self):
-        col = int(self.anim_time * WALK_FPS) % WALK_FRAMES if self.is_moving() else 0
+        if self.is_knocked_back():
+            col = HIT_COL
+        elif self.is_moving():
+            col = int(self.anim_time * WALK_FPS) % WALK_FRAMES
+        else:
+            col = 0
         Rat.image.clip_draw(col * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                             FRAME_SIZE, FRAME_SIZE, self.x, self.y,
                             FRAME_SIZE * RAT_SCALE, FRAME_SIZE * RAT_SCALE)

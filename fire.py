@@ -60,6 +60,12 @@ class Fireball:
         self.anim_time += frame_time
         self.x += self.vx * frame_time
         self.y += self.vy * frame_time
+        for target in game_world.hittables:
+            if collide(self.get_bb(), target.get_hit_bb()):
+                self.alive = False
+                game_world.add(FireImpact(self.x, self.y))
+                target.on_fireball_hit(self.dir_x, self.dir_y)
+                return
         for bb, burnable, on_hit in game_world.obstacles:
             if collide(self.get_bb(), bb):
                 self.hit(burnable, on_hit)
