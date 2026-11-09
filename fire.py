@@ -6,6 +6,7 @@ import game_world
 from collision import collide
 
 FIREBALL_SPEED = 500     # 초당 이동 픽셀
+FIREBALL_DAMAGE = 10     # 한 발당 피해
 FIREBALL_FPS = 12
 FIREBALL_FRAMES = 4
 FIREBALL_SIZE = 64       # fireball_sheet.png: 4열 x 8행, 프레임 64x64
@@ -64,7 +65,7 @@ class Fireball:
             if collide(self.get_bb(), target.get_hit_bb()):
                 self.alive = False
                 game_world.add(FireImpact(self.x, self.y))
-                target.on_fireball_hit(self.dir_x, self.dir_y)
+                target.on_fireball_hit(self.dir_x, self.dir_y, FIREBALL_DAMAGE)
                 return
         for bb, burnable, on_hit in game_world.obstacles:
             if collide(self.get_bb(), bb):
@@ -75,7 +76,7 @@ class Fireball:
         self.alive = False
         game_world.add(FireImpact(self.x, self.y))
         # 맞은 물체가 직접 반응을 처리하면(예: 자물쇠가 달아오름) 불꽃은 남기지 않음
-        handled = on_hit() if on_hit else False
+        handled = on_hit(FIREBALL_DAMAGE) if on_hit else False
         if burnable and not handled:
             game_world.add(Burning(self.x, self.y))
 

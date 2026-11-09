@@ -70,7 +70,7 @@ def init():
               background.to_canvas_x(right), background.to_canvas_y(top))
              for left, top, right, bottom in RAT_AREAS]
     rats = spawn_rats(RAT_COUNT, areas, obstacle_bbs())
-    game_world.hittables = rats
+    game_world.hittables = list(rats)
 
 
 def finish():
@@ -121,6 +121,9 @@ def update(frame_time):
     kai.update(frame_time, obstacle_bbs())
     for rat in rats:
         rat.update(frame_time, obstacle_bbs())
+    # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
+    rats[:] = [rat for rat in rats if rat.alive]
+    game_world.hittables = [rat for rat in rats if not rat.is_dead()]
     game_world.update(frame_time)
 
 

@@ -26,6 +26,12 @@ KNOCKBACK_SPEED = 320
 KNOCKBACK_TIME = 0.25
 HIT_COL = 9  # 맞았을 때 프레임
 
+RAT_HP = 30
+# HP가 0이 되면 밀려난 뒤 기절 프레임(10~11열)을 보여주다가 사라짐
+DEATH_COLS = (10, 11)
+DEATH_FPS = 4
+DEATH_TIME = 1.2
+
 IDLE_TIME = (0.5, 2.0)  # 멈춰 있는 시간 범위(초)
 WALK_TIME = (1.0, 3.0)  # 한 방향으로 걷는 시간 범위(초)
 
@@ -49,6 +55,9 @@ class Rat:
         self.anim_time = random.random()  # 쥐마다 걷는 박자가 어긋나도록
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
+        self.hp = RAT_HP
+        self.death_time = 0.0
+        self.alive = True  # False가 되면 play_mode가 목록에서 지움
         self.start_idle()
 
     def foot_y(self):
@@ -63,10 +72,14 @@ class Rat:
         return (self.x - HIT_HALF_WIDTH, self.y + HIT_BOTTOM,
                 self.x + HIT_HALF_WIDTH, self.y + HIT_TOP)
 
-    def on_fireball_hit(self, dir_x, dir_y):
+    def on_fireball_hit(self, dir_x, dir_y, damage):
         # dir: 파이어볼이 날아온 방향(길이 1). 맞은 반대편, 즉 파이어볼 진행 방향으로 밀려남
+        self.hp = max(0, self.hp - damage)
         self.knockback_dir = (dir_x, dir_y)
         self.knockback_time = KNOCKBACK_TIME
+
+    def is_dead(self):
+        return self.hp <= 0
 
     def is_knocked_back(self):
         return self.knockback_time > 0
@@ -104,6 +117,11 @@ class Rat:
         if self.is_knocked_back():
             self.update_knockback(frame_time, obstacles)
             return
+        if self.is_dead():
+            self.death_time += frame_time
+            if self.death_time >= DEATH_TIME:
+                self.alive = False
+            return
         self.state_time -= frame_time
         if self.state_time <= 0:
             if self.is_moving():
@@ -124,6 +142,8 @@ class Rat:
     def draw(self):
         if self.is_knocked_back():
             col = HIT_COL
+        elif self.is_dead():
+            col = DEATH_COLS[int(self.death_time * DEATH_FPS) % len(DEATH_COLS)]
         elif self.is_moving():
             col = int(self.anim_time * WALK_FPS) % WALK_FRAMES
         else:

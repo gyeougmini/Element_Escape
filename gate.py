@@ -8,8 +8,10 @@ FRAME_WIDTH, FRAME_HEIGHT = 1024, 768
 SHEET_COLS = 4
 SHEET_HEIGHT = 3072
 
-HITS_TO_MELT = 3       # 이만큼 맞으면 자물쇠가 녹음 (1~3단계 = 프레임 1~3)
-COOL_TIME = 3.0        # 이 시간(초) 동안 맞지 않을 때마다 한 단계씩 식음 (3 -> 2 -> 1 -> 원래 자물쇠)
+LOCK_HP = 25           # 받은 피해가 이만큼 쌓이면 자물쇠가 녹음
+HEAT_STAGES = 3        # 달아오른 단계 수 (프레임 1~3): 받은 피해가 LOCK_HP의 1/3, 2/3, 전부일 때
+COOL_TIME = 3.0        # 이 시간(초) 동안 맞지 않을 때마다 COOL_AMOUNT만큼 회복 (한 단계씩 식음)
+COOL_AMOUNT = 10
 MELT_HOLD = 0.3        # 3단계(가장 뜨거운 상태)를 보여주는 시간
 OPEN_FPS = 8           # 녹는 애니메이션부터 문이 다 열릴 때까지의 재생 속도
 FIRST_OPEN_FRAME = 4
@@ -28,7 +30,7 @@ class Gate:
         self.dark_sheet = load_image(DARK_SHEET)
         self.background = background
         self.dark = False
-        self.heat = 0            # 맞은 횟수 (0: 원래 자물쇠, 1~3: 달아오른 단계)
+        self.damage = 0          # 자물쇠가 받은 피해 (LOCK_HP 이상이면 녹음)
         self.cool_time = 0.0
         self.open_time = None    # 녹기 시작한 뒤 흐른 시간, None이면 아직 잠김
         self.door_bb = self.to_bb(DOOR_BOX)
@@ -49,30 +51,34 @@ class Gate:
     def is_open(self):
         return self.is_melting() and self.current_frame() == LAST_FRAME
 
-    def on_fire_hit(self):
+    def heat_stage(self):
+        # 받은 피해에 따른 달아오른 단계 (0: 원래 자물쇠 ~ HEAT_STAGES: 녹기 직전)
+        return min(HEAT_STAGES, int(self.damage / (LOCK_HP / HEAT_STAGES)))
+
+    def on_fire_hit(self, damage):
         """파이어볼이 문(자물쇠)에 맞았을 때 호출. 처리했으면 True (불꽃 이펙트를 따로 남기지 않음)"""
         if not self.dark or self.is_melting():
             return False  # 정전 전에는 보통 물체처럼 불만 붙음
-        self.heat += 1
+        self.damage += damage
         self.cool_time = 0.0
-        if self.heat >= HITS_TO_MELT:
+        if self.damage >= LOCK_HP:
             self.open_time = 0.0
         return True
 
     def update(self, frame_time):
         if self.is_melting():
             self.open_time += frame_time
-        elif self.heat > 0:
+        elif self.damage > 0:
             self.cool_time += frame_time
             if self.cool_time >= COOL_TIME:
-                self.heat -= 1
+                self.damage = max(0, self.damage - COOL_AMOUNT)
                 self.cool_time = 0.0
 
     def current_frame(self):
         if not self.is_melting():
-            return self.heat
+            return self.heat_stage()
         if self.open_time < MELT_HOLD:
-            return HITS_TO_MELT
+            return HEAT_STAGES
         frame = FIRST_OPEN_FRAME + int((self.open_time - MELT_HOLD) * OPEN_FPS)
         return min(frame, LAST_FRAME)
 
