@@ -119,8 +119,10 @@ def update(frame_time):
     gate.update(frame_time)
     update_obstacles()
     kai.update(frame_time, obstacle_bbs())
+    # 철창 문이 열리기 전에는 쥐가 카이를 추적하지 않고 돌아다니기만 함
+    chase_target = kai if gate.is_open() else None
     for rat in rats:
-        rat.update(frame_time, obstacle_bbs(), kai)
+        rat.update(frame_time, obstacle_bbs(), chase_target)
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
