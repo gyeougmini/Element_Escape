@@ -3,7 +3,7 @@ import random
 
 from pico2d import *
 
-from collision import collide_any
+from collision import collide, collide_any
 
 # rat_animation.png: 12열 x 8행, 프레임 64x64
 # 행(방향)은 카이 시트와 같은 순서, 0~6열 걷기 / 7~8열 물기 / 9열 맞음 / 10~11열 기절
@@ -35,15 +35,26 @@ DEATH_TIME = 1.2
 IDLE_TIME = (0.5, 2.0)  # 멈춰 있는 시간 범위(초)
 WALK_TIME = (1.0, 3.0)  # 한 방향으로 걷는 시간 범위(초)
 
+# 쥐의 발 중심에서 이 거리(px) 안에 카이의 발이 있으면 추적
+CHASE_RANGE = 150
+CHASE_SPEED = 110  # 추적할 때는 돌아다닐 때보다 빠르게
+
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터), 카이와 같음
 DIRECTION_ROWS = {
     (0, -1): 0, (1, -1): 1, (1, 0): 2, (1, 1): 3,
     (0, 1): 4, (-1, 1): 5, (-1, 0): 6, (-1, -1): 7,
 }
+# 오른쪽부터 반시계 방향으로 45도씩의 8방향: 임의의 방향을 가장 가까운 8방향으로 맞출 때 사용
+OCTANT_DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+
+
+def bb_center(bb):
+    left, bottom, right, top = bb
+    return (left + right) / 2, (bottom + top) / 2
 
 
 class Rat:
-    """실험 쥐: 멈췄다가 무작위 방향으로 걷기를 반복하며 돌아다님"""
+    """실험 쥐: 멈췄다가 무작위 방향으로 걷기를 반복하며 돌아다니고, 카이가 가까이 오면 추적"""
     image = None
 
     def __init__(self, x, y):
@@ -58,6 +69,7 @@ class Rat:
         self.hp = RAT_HP
         self.death_time = 0.0
         self.alive = True  # False가 되면 play_mode가 목록에서 지움
+        self.chasing = False
         self.start_idle()
 
     def foot_y(self):
@@ -112,7 +124,32 @@ class Rat:
         if not self.is_knocked_back():
             self.start_idle()
 
-    def update(self, frame_time, obstacles):
+    def distance_to(self, target):
+        x, y = bb_center(self.get_bb())
+        tx, ty = bb_center(target.get_bb())
+        return math.hypot(tx - x, ty - y)
+
+    def chase(self, target, frame_time, obstacles):
+        x, y = bb_center(self.get_bb())
+        tx, ty = bb_center(target.get_bb())
+        dx, dy = tx - x, ty - y
+        # 카이 쪽에 가장 가까운 8방향을 바라봄
+        octant = round(math.degrees(math.atan2(dy, dx)) / 45) % 8
+        self.dir_x, self.dir_y = OCTANT_DIRECTIONS[octant]
+        self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
+        if collide(self.get_bb(), target.get_bb()):
+            return  # 이미 붙어 있으면 제자리에서 바라보기만 함
+        length = math.hypot(dx, dy)
+        old_x = self.x
+        self.x += dx / length * CHASE_SPEED * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.x = old_x
+        old_y = self.y
+        self.y += dy / length * CHASE_SPEED * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.y = old_y
+
+    def update(self, frame_time, obstacles, target=None):
         self.anim_time += frame_time
         if self.is_knocked_back():
             self.update_knockback(frame_time, obstacles)
@@ -122,6 +159,14 @@ class Rat:
             if self.death_time >= DEATH_TIME:
                 self.alive = False
             return
+        if target and self.distance_to(target) <= CHASE_RANGE:
+            self.chasing = True
+            self.chase(target, frame_time, obstacles)
+            return
+        if self.chasing:
+            # 놓치면 잠깐 멈췄다가 다시 돌아다님
+            self.chasing = False
+            self.start_idle()
         self.state_time -= frame_time
         if self.state_time <= 0:
             if self.is_moving():
@@ -151,6 +196,12 @@ class Rat:
         Rat.image.clip_draw(col * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                             FRAME_SIZE, FRAME_SIZE, self.x, self.y,
                             FRAME_SIZE * RAT_SCALE, FRAME_SIZE * RAT_SCALE)
+
+    def draw_chase_range(self):
+        # 디버그용: 추적 범위를 발 중심 기준 원으로 표시 (추적 중이면 빨강, 아니면 노랑)
+        x, y = bb_center(self.get_bb())
+        color = (255, 0, 0) if self.chasing else (255, 220, 0)
+        draw_circle(x, y, int(CHASE_RANGE), *color)
 
 
 def spawn_rats(count, areas, obstacles, min_distance=60, max_tries=200):

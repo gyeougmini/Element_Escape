@@ -120,7 +120,7 @@ def update(frame_time):
     update_obstacles()
     kai.update(frame_time, obstacle_bbs())
     for rat in rats:
-        rat.update(frame_time, obstacle_bbs())
+        rat.update(frame_time, obstacle_bbs(), kai)
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
@@ -151,6 +151,7 @@ def draw():
         for rat in rats:
             draw_bb(rat.get_bb())
             draw_bb(rat.get_hit_bb())
+            rat.draw_chase_range()
         for o in game_world.objects:
             if hasattr(o, 'get_bb'):
                 draw_bb(o.get_bb())
