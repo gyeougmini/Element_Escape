@@ -8,6 +8,7 @@ from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
 from gate import Gate
 from kai import Kai
 from notice import Notice
+from rat import spawn_rats
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' 글자 (위에서부터의 픽셀 좌표)
@@ -22,6 +23,12 @@ BLACKOUT_TEXT = '비상. 정전 발생.\n경계모드 활성화'
 FIRE_NOTICE_TEXT = '불 공격: Q'
 FIRE_NOTICE_DELAY = 0.3
 FIRE_NOTICE_HOLD = 2.0
+RAT_COUNT = 5
+# 쥐가 나타나는 철창 바깥 구역: cell_bg.png 기준 (left, top, right, bottom), 위에서부터의 픽셀 좌표
+RAT_AREAS = [
+    (70, 520, 955, 700),   # 아래쪽 복도
+    (775, 140, 955, 520),  # 오른쪽 복도 (EXIT 쪽)
+]
 DIALOGUE_SCALE = 1.5
 DIALOGUE_MARGIN = 40  # 화면 오른쪽 아래 모서리에서 대화창까지의 거리
 
@@ -42,8 +49,12 @@ def update_obstacles():
     game_world.obstacles = background.get_obstacles() + gate.get_obstacles()
 
 
+def obstacle_bbs():
+    return [bb for bb, _, _ in game_world.obstacles]
+
+
 def init():
-    global background, gate, kai, notice, after_notice_time, lights_off, dialogue
+    global background, gate, kai, rats, notice, after_notice_time, lights_off, dialogue
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
     lights_off = False
@@ -55,6 +66,10 @@ def init():
     start_x, start_y = KAI_START_IMAGE_POS
     kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     update_obstacles()
+    areas = [(background.to_canvas_x(left), background.to_canvas_y(bottom),
+              background.to_canvas_x(right), background.to_canvas_y(top))
+             for left, top, right, bottom in RAT_AREAS]
+    rats = spawn_rats(RAT_COUNT, areas, obstacle_bbs())
 
 
 def finish():
@@ -101,19 +116,24 @@ def update(frame_time):
         dialogue.update(frame_time)
     gate.update(frame_time)
     update_obstacles()
-    kai.update(frame_time, [bb for bb, _, _ in game_world.obstacles])
+    kai.update(frame_time, obstacle_bbs())
+    for rat in rats:
+        rat.update(frame_time, obstacle_bbs())
     game_world.update(frame_time)
 
 
 def draw():
     background.draw()
-    # 카이가 창살 뒤(감방 안)에 있으면 창살이 카이를 가리도록 나중에 그림
-    if kai.foot_y() > background.gate_base_y:
-        kai.draw()
-        gate.draw()
-    else:
-        gate.draw()
-        kai.draw()
+    # 발이 위쪽에 있는 캐릭터부터 그려서 아래쪽(화면 앞쪽) 캐릭터가 위에 겹치게 함
+    # 창살 뒤(감방 안)에 있는 캐릭터는 창살보다 먼저 그려서 창살에 가려지게 함
+    actors = sorted([kai] + rats, key=lambda a: a.foot_y(), reverse=True)
+    for actor in actors:
+        if actor.foot_y() > background.gate_base_y:
+            actor.draw()
+    gate.draw()
+    for actor in actors:
+        if actor.foot_y() <= background.gate_base_y:
+            actor.draw()
     # 파이어볼과 불꽃 이펙트는 항상 맨 위에 그림
     game_world.draw()
     notice.draw()
@@ -123,6 +143,8 @@ def draw():
         for bb, _, _ in game_world.obstacles:
             draw_bb(bb)
         draw_bb(kai.get_bb())
+        for rat in rats:
+            draw_bb(rat.get_bb())
         for o in game_world.objects:
             if hasattr(o, 'get_bb'):
                 draw_bb(o.get_bb())
