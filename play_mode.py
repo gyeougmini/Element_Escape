@@ -49,8 +49,9 @@ def make_arc_dialogue():
 
 def update_obstacles():
     # 문은 열리면 충돌 박스가 바뀌므로 배경, 문, 상자의 장애물을 매 프레임 합침
+    box_obstacles = [box.get_obstacle() for box in boxes]
     game_world.obstacles = (background.get_obstacles() + gate.get_obstacles()
-                            + [box.get_obstacle() for box in boxes])
+                            + [obstacle for obstacle in box_obstacles if obstacle])
 
 
 def obstacle_bbs():
@@ -129,6 +130,9 @@ def update(frame_time):
     if dialogue:
         dialogue.update(frame_time)
     gate.update(frame_time)
+    for box in boxes:
+        box.update(frame_time)
+    boxes[:] = [box for box in boxes if box.alive]  # 다 타서 사라진 상자는 지움
     update_obstacles()
     # 문이 열리며 생긴 문짝 박스처럼 캐릭터가 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     for actor in [kai] + rats:
