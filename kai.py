@@ -31,7 +31,7 @@ READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
 
 KAI_HP = 100
 KAI_ENERGY = 100
-FIRE_ENERGY_COST = 10  # 파이어볼 한 발에 쓰는 에너지
+FIRE_ENERGY_COST = 5  # 파이어볼 한 발에 쓰는 에너지
 ENERGY_REGEN = 3.5     # 초당 에너지 충전량
 # 쥐에게 부딪히면 반대 방향으로 밀려남: 처음 속도에서 0까지 줄어들며 약 60px 이동
 KNOCKBACK_SPEED = 480

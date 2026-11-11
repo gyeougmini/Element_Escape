@@ -18,8 +18,9 @@ MOVE_NOTICE_TEXT = '플레이어 이동: WASD'
 MOVE_NOTICE_DELAY = 0.5  # game_framework.FADE_TIME과 같게 해서 화면이 다 밝아진 뒤 등장
 MOVE_NOTICE_HOLD = 2.0
 LIGHTS_OFF_DELAY = 3.0  # 안내가 사라지고 이 시간(초)이 지나면 조명이 꺼짐 (cell_dark_bg.png로 교체)
-# 정전과 동시에 나오는 ARC Lab 방송: 대화창이 떠 있는 동안은 플레이어 조작을 막음
+# 정전 후 나오는 ARC Lab 방송: 정전부터 대화창이 닫힐 때까지 플레이어 조작을 막음
 BLACKOUT_TEXT = '비상. 정전 발생.\n경계모드 활성화'
+BLACKOUT_DIALOGUE_DELAY = 1.0  # 정전되고 이 시간(초)이 지나면 대화창이 나옴
 # ARC Lab 대화창을 닫으면 나오는 안내: 이동 안내와 같은 방식으로 입력을 막고 보여줌
 FIRE_NOTICE_TEXT = '불 공격: Q'
 FIRE_NOTICE_DELAY = 0.3
@@ -55,12 +56,13 @@ def obstacle_bbs():
 
 
 def init():
-    global background, gate, kai, rats, hud, notice, after_notice_time, lights_off, dialogue
+    global background, gate, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
     hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
     lights_off = False
     dialogue = None  # 지금 떠 있는 대화창
+    dialogue_wait = None  # 정전 후 대화창이 나올 때까지 남은 시간(초), 기다리는 중이 아니면 None
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
     gate = Gate(background)
@@ -85,8 +87,8 @@ def handle_events():
     for event in get_events():
         if event.type == SDL_QUIT:
             game_framework.quit()
-        elif not notice.is_done():
-            continue  # 안내 중에는 키보드/마우스 입력을 모두 무시
+        elif not notice.is_done() or dialogue_wait is not None:
+            continue  # 안내 중이나 정전 후 대화창을 기다리는 동안에는 키보드/마우스 입력을 모두 무시
         elif dialogue:
             # 대화 중에는 클릭만 받음: 출력 중이면 한 번에 보여주고, 다 나온 상태면 닫음
             if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
@@ -106,7 +108,7 @@ def handle_events():
 
 
 def update(frame_time):
-    global after_notice_time, lights_off, dialogue
+    global after_notice_time, lights_off, dialogue, dialogue_wait
     notice.update(frame_time)
     if notice.is_done() and not lights_off:
         after_notice_time += frame_time
@@ -115,6 +117,11 @@ def update(frame_time):
             background.set_dark(True)
             gate.set_dark(True)
             kai.stop()
+            dialogue_wait = BLACKOUT_DIALOGUE_DELAY
+    if dialogue_wait is not None:
+        dialogue_wait -= frame_time
+        if dialogue_wait <= 0:
+            dialogue_wait = None
             dialogue = make_arc_dialogue()
     if dialogue:
         dialogue.update(frame_time)
