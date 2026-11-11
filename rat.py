@@ -5,8 +5,9 @@ from pico2d import *
 
 from collision import collide, collide_any
 
-# rat_animation.png: 12열 x 8행, 프레임 64x64
+# rat_animation.png: 30열 x 8행(1920x512), 프레임 64x64
 # 행(방향)은 카이 시트와 같은 순서, 0~6열 걷기 / 7~8열 물기 / 9열 맞음 / 10~11열 기절
+# 12~17열 불 / 18~23열 물 / 24~29열 전기 속성을 띤 걷기 (물/전기는 아직 사용하지 않음)
 FRAME_SIZE = 64
 SHEET_HEIGHT = 512
 WALK_FRAMES = 7
@@ -32,6 +33,13 @@ RAT_DAMAGE = 5  # 카이와 부딪혔을 때 카이에게 주는 피해
 DEATH_COLS = (10, 11)
 DEATH_FPS = 4
 DEATH_TIME = 1.2
+
+# 파이어볼에 맞으면 '불타는' 상태: BURN_TIME 동안 HP가 조금씩 줄어 합쳐서 BURN_DAMAGE만큼 피해를 받고 빨간(불) 프레임으로 그림
+# 불타는 중에 또 맞으면 파이어볼 피해만 받고, 남은 지속 피해는 버린 뒤 처음부터 다시 셈
+BURN_TIME = 3.0
+BURN_DAMAGE = 5
+BURN_FIRST_COL = 12  # 불 걷기 프레임 12~17열
+BURN_WALK_FRAMES = 6
 
 IDLE_TIME = (0.5, 2.0)  # 멈춰 있는 시간 범위(초)
 WALK_TIME = (1.0, 3.0)  # 한 방향으로 걷는 시간 범위(초)
@@ -71,6 +79,8 @@ class Rat:
         self.death_time = 0.0
         self.alive = True  # False가 되면 play_mode가 목록에서 지움
         self.chasing = False
+        self.burn_time = 0.0  # 불타는 상태가 남은 시간(초), 0이면 불타지 않음
+        self.burn_damage_left = 0.0  # 이번 불타는 상태에서 아직 받지 않은 지속 피해
         self.start_idle()
 
     def foot_y(self):
@@ -90,9 +100,33 @@ class Rat:
         self.hp = max(0, self.hp - damage)
         self.knockback_dir = (dir_x, dir_y)
         self.knockback_time = KNOCKBACK_TIME
+        if not self.is_dead():
+            # 이미 불타는 중이어도 이전 지속 피해는 버리고 3초를 처음부터 다시 셈
+            self.burn_time = BURN_TIME
+            self.burn_damage_left = BURN_DAMAGE
 
     def is_dead(self):
         return self.hp <= 0
+
+    def is_burning(self):
+        return self.burn_time > 0
+
+    def update_burn(self, frame_time):
+        if not self.is_burning():
+            return
+        if self.is_dead():
+            self.burn_time = 0.0
+            return
+        # 남은 시간 중 이번 프레임이 차지하는 비율만큼 남은 피해를 줌: 마지막 프레임에 남은 피해가 모두 들어가 합이 정확히 BURN_DAMAGE
+        damage = self.burn_damage_left * min(frame_time, self.burn_time) / self.burn_time
+        self.burn_damage_left -= damage
+        self.burn_time -= frame_time
+        self.hp -= damage
+        if self.hp < 1e-6:  # 소수 계산 오차로 HP가 0에 아주 가깝게 남는 것을 막음
+            self.hp = 0
+        if self.burn_time <= 0 or self.is_dead():
+            self.hp = round(self.hp, 6)  # 소수 오차 정리 (예: 14.9999999 -> 15)
+            self.burn_time = 0.0
 
     def is_knocked_back(self):
         return self.knockback_time > 0
@@ -165,6 +199,7 @@ class Rat:
 
     def update(self, frame_time, obstacles, target=None):
         self.anim_time += frame_time
+        self.update_burn(frame_time)
         if self.is_knocked_back():
             self.update_knockback(frame_time, obstacles)
             return
@@ -203,6 +238,11 @@ class Rat:
             col = HIT_COL
         elif self.is_dead():
             col = DEATH_COLS[int(self.death_time * DEATH_FPS) % len(DEATH_COLS)]
+        elif self.is_burning():
+            # 불타는 동안은 빨간 불 프레임: 멈춰 있으면 첫 프레임
+            col = BURN_FIRST_COL
+            if self.is_moving():
+                col += int(self.anim_time * WALK_FPS) % BURN_WALK_FRAMES
         elif self.is_moving():
             col = int(self.anim_time * WALK_FPS) % WALK_FRAMES
         else:
