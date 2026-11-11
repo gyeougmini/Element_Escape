@@ -3,6 +3,7 @@ from pico2d import *
 import game_framework
 import game_world
 from background import Background
+from box import make_boxes
 from collision import draw_bb, push_out_offset
 from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
 from gate import Gate
@@ -47,8 +48,9 @@ def make_arc_dialogue():
 
 
 def update_obstacles():
-    # 문은 열리면 충돌 박스가 바뀌므로 배경과 문의 장애물을 매 프레임 합침
-    game_world.obstacles = background.get_obstacles() + gate.get_obstacles()
+    # 문은 열리면 충돌 박스가 바뀌므로 배경, 문, 상자의 장애물을 매 프레임 합침
+    game_world.obstacles = (background.get_obstacles() + gate.get_obstacles()
+                            + [box.get_obstacle() for box in boxes])
 
 
 def obstacle_bbs():
@@ -56,7 +58,7 @@ def obstacle_bbs():
 
 
 def init():
-    global background, gate, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
+    global background, gate, boxes, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
     hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
@@ -66,6 +68,7 @@ def init():
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
     gate = Gate(background)
+    boxes = make_boxes(background)
     kai = Kai(0, 0)
     start_x, start_y = KAI_START_IMAGE_POS
     kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
@@ -148,9 +151,9 @@ def update(frame_time):
 
 def draw():
     background.draw()
-    # 발이 위쪽에 있는 캐릭터부터 그려서 아래쪽(화면 앞쪽) 캐릭터가 위에 겹치게 함
+    # 발이 위쪽에 있는 캐릭터(와 상자)부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     # 창살 뒤(감방 안)에 있는 캐릭터는 창살보다 먼저 그려서 창살에 가려지게 함
-    actors = sorted([kai] + rats, key=lambda a: a.foot_y(), reverse=True)
+    actors = sorted([kai] + rats + boxes, key=lambda a: a.foot_y(), reverse=True)
     for actor in actors:
         if actor.foot_y() > background.gate_base_y:
             actor.draw()
