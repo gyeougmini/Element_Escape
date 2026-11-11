@@ -32,6 +32,7 @@ READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
 KAI_HP = 100
 KAI_ENERGY = 100
 FIRE_ENERGY_COST = 10  # 파이어볼 한 발에 쓰는 에너지
+ENERGY_REGEN = 3.5     # 초당 에너지 충전량
 # 쥐에게 부딪히면 반대 방향으로 밀려남: 처음 속도에서 0까지 줄어들며 약 60px 이동
 KNOCKBACK_SPEED = 480
 KNOCKBACK_TIME = 0.25
@@ -201,6 +202,7 @@ class Kai:
     def update(self, frame_time, obstacles):
         self.anim_time += frame_time
         self.invincible_time = max(0.0, self.invincible_time - frame_time)
+        self.energy = min(self.max_energy, self.energy + ENERGY_REGEN * frame_time)
         if self.state == 'fire_attack':
             self.attack_time += frame_time
             if not self.fired and self.attack_time >= ATTACK_FRAME_TIME:
