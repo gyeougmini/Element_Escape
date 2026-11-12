@@ -10,7 +10,8 @@ from gate import Gate
 from hud import ElementHud
 from kai import Kai
 from notice import Notice
-from rat import spawn_rats
+from potion import Potion
+from rat import Rat, spawn_rats
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' 글자 (위에서부터의 픽셀 좌표)
@@ -58,8 +59,23 @@ def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles]
 
 
+def release_box_content(box):
+    # 상자가 다 타서 무너지면 안에 든 물약이나 쥐가 상자 자리에 나옴
+    content = box.take_content()
+    if content is None:
+        return
+    x, y = box.content_pos()
+    if content == 'rat':
+        rat = Rat(0, 0)
+        rat.place_feet_at(x, y)
+        rat.ignite()  # 불타던 상자에서 나왔으므로 불이 붙은 채로 돌아다님
+        rats.append(rat)
+    else:
+        potions.append(Potion(content, x, y))
+
+
 def init():
-    global background, gate, boxes, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
+    global background, gate, boxes, potions, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
     hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
@@ -70,6 +86,7 @@ def init():
     background = Background(width, height)
     gate = Gate(background)
     boxes = make_boxes(background)
+    potions = []  # 상자에서 나와 바닥에 놓인 물약
     kai = Kai(0, 0)
     start_x, start_y = KAI_START_IMAGE_POS
     kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
@@ -132,6 +149,7 @@ def update(frame_time):
     gate.update(frame_time)
     for box in boxes:
         box.update(frame_time)
+        release_box_content(box)
     boxes[:] = [box for box in boxes if box.alive]  # 다 타서 사라진 상자는 지움
     update_obstacles()
     # 문이 열리며 생긴 문짝 박스처럼 캐릭터가 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
@@ -148,6 +166,9 @@ def update(frame_time):
         rat.touch(kai)
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
+    for potion in potions:
+        potion.update(frame_time, kai)
+    potions[:] = [potion for potion in potions if potion.alive]
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
     game_world.update(frame_time)
     hud.update(frame_time, kai)
@@ -157,7 +178,7 @@ def draw():
     background.draw()
     # 발이 위쪽에 있는 캐릭터(와 상자)부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     # 창살 뒤(감방 안)에 있는 캐릭터는 창살보다 먼저 그려서 창살에 가려지게 함
-    actors = sorted([kai] + rats + boxes, key=lambda a: a.foot_y(), reverse=True)
+    actors = sorted([kai] + rats + boxes + potions, key=lambda a: a.foot_y(), reverse=True)
     for actor in actors:
         if actor.foot_y() > background.gate_base_y:
             actor.draw()

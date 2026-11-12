@@ -29,13 +29,23 @@ BOX_POSITIONS = [
     (870, 349), (922, 349),
     (870, 409),
 ]
+# 상자 안에 든 것: BOX_POSITIONS의 순서(0부터) -> 'hp'/'ep' 물약, 'rat' 실험 쥐
+# 상자가 다 타서 무너지면(PASSABLE_FRAME) 나옴. 쥐는 불에 탄 채로 나와서 '불타는' 상태로 돌아다님
+BOX_CONTENTS = {
+    1: 'hp',    # 아래쪽 복도 왼쪽 가운데
+    4: 'ep',    # 아래쪽 복도 오른쪽 뒷줄 가운데
+    2: 'rat',   # 아래쪽 복도 왼쪽 오른쪽 끝
+    5: 'rat',   # 아래쪽 복도 오른쪽 뒷줄 오른쪽 끝
+    6: 'rat',   # 아래쪽 복도 오른쪽 앞줄 왼쪽
+    8: 'rat',   # 오른쪽 복도 뒷줄 왼쪽
+}
 
 
 class Box:
     """나무 상자: 지나갈 수 없는 물체. 불 공격에 맞으면 불타 없어지고, 맞닿은 상자에 불이 번짐"""
     image = None
 
-    def __init__(self, background, image_x, image_body_bottom):
+    def __init__(self, background, image_x, image_body_bottom, content=None):
         if Box.image is None:
             Box.image = load_image(BOX_IMAGE)
         self.image_x, self.image_bottom = image_x, image_body_bottom
@@ -51,6 +61,7 @@ class Box:
         self.burn_time = None    # 불붙은 뒤 흐른 시간, None이면 멀쩡함
         self.spread = False      # 이웃에 불을 옮겼는지
         self.alive = True        # False가 되면 play_mode가 목록에서 지움
+        self.content = content   # 안에 든 것 ('hp', 'ep', 'rat' 또는 None)
 
     def is_touching(self, other):
         # 가로/세로/대각선으로 바로 옆 칸에 있으면 맞닿은 것으로 봄
@@ -93,6 +104,18 @@ class Box:
         if self.current_frame() > LAST_FRAME:
             self.alive = False
 
+    def take_content(self):
+        """상자가 무너져 지나갈 수 있게 되면 안에 든 것을 한 번만 돌려줌, 아니면 None"""
+        if self.content is None or self.current_frame() < PASSABLE_FRAME:
+            return None
+        content, self.content = self.content, None
+        return content
+
+    def content_pos(self):
+        # 안에 든 것이 나올 자리: 상자 몸체 가운데의 (x, y)
+        left, bottom, right, top = self.bb
+        return (left + right) / 2, (bottom + top) / 2
+
     def foot_y(self):
         # 캐릭터와 같은 기준으로 앞뒤 순서를 정함
         return self.bottom
@@ -115,7 +138,8 @@ class Box:
 
 
 def make_boxes(background):
-    boxes = [Box(background, x, bottom) for x, bottom in BOX_POSITIONS]
+    boxes = [Box(background, x, bottom, BOX_CONTENTS.get(i))
+             for i, (x, bottom) in enumerate(BOX_POSITIONS)]
     for box in boxes:
         box.neighbors = [other for other in boxes if box.is_touching(other)]
     return boxes

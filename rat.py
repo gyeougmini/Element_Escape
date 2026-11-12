@@ -101,9 +101,17 @@ class Rat:
         self.knockback_dir = (dir_x, dir_y)
         self.knockback_time = KNOCKBACK_TIME
         if not self.is_dead():
-            # 이미 불타는 중이어도 이전 지속 피해는 버리고 3초를 처음부터 다시 셈
-            self.burn_time = BURN_TIME
-            self.burn_damage_left = BURN_DAMAGE
+            self.ignite()
+
+    def ignite(self):
+        """'불타는' 상태로 만듦. 이미 불타는 중이어도 이전 지속 피해는 버리고 3초를 처음부터 다시 셈"""
+        self.burn_time = BURN_TIME
+        self.burn_damage_left = BURN_DAMAGE
+
+    def place_feet_at(self, x, y):
+        # 발 충돌 박스의 중심이 (x, y)에 오도록 위치를 맞춤
+        self.x = x
+        self.y = y + FOOT_OFFSET * RAT_SCALE - FOOT_HEIGHT / 2
 
     def is_dead(self):
         return self.hp <= 0
