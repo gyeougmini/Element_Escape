@@ -12,6 +12,7 @@ from kai import Kai
 from notice import Notice
 from potion import Potion
 from rat import Rat, spawn_rats
+from storage_door import StorageDoor
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 KAI_START_IMAGE_POS = (560, 305)  # 시작 위치: cell_bg.png 바닥의 '07' 글자 (위에서부터의 픽셀 좌표)
@@ -74,8 +75,14 @@ def release_box_content(box):
         potions.append(Potion(content, x, y))
 
 
+def all_rats_caught():
+    # 돌아다니는 쥐가 모두 쓰러졌고, 아직 상자 안에 남아 있는 쥐도 없음
+    return (all(rat.is_dead() for rat in rats)
+            and not any(box.content == 'rat' for box in boxes))
+
+
 def init():
-    global background, gate, boxes, potions, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
+    global background, gate, storage_door, boxes, potions, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
     hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
@@ -85,6 +92,7 @@ def init():
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height)
     gate = Gate(background)
+    storage_door = StorageDoor(background)
     boxes = make_boxes(background)
     potions = []  # 상자에서 나와 바닥에 놓인 물약
     kai = Kai(0, 0)
@@ -166,6 +174,9 @@ def update(frame_time):
         rat.touch(kai)
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
+    if all_rats_caught():
+        storage_door.open()
+    storage_door.update(frame_time)
     for potion in potions:
         potion.update(frame_time, kai)
     potions[:] = [potion for potion in potions if potion.alive]
@@ -176,6 +187,7 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    storage_door.draw()
     # 발이 위쪽에 있는 캐릭터(와 상자)부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     # 창살 뒤(감방 안)에 있는 캐릭터는 창살보다 먼저 그려서 창살에 가려지게 함
     actors = sorted([kai] + rats + boxes + potions, key=lambda a: a.foot_y(), reverse=True)
