@@ -2,9 +2,10 @@ from pico2d import *
 
 import game_framework
 import game_world
+import storage_mode
 from background import Background
 from box import make_boxes
-from collision import draw_bb, push_out_offset
+from collision import collide, draw_bb, push_out_offset
 from dialogue import DialogueBox, LEFT_SLANT_LAYOUT
 from gate import Gate
 from hud import ElementHud
@@ -29,6 +30,9 @@ FIRE_NOTICE_TEXT = '불 공격: Q'
 FIRE_NOTICE_DELAY = 0.3
 FIRE_NOTICE_HOLD = 2.0
 RAT_COUNT = 5
+# 창고 문 바로 앞: 문이 다 열린 뒤 카이의 발이 여기에 닿으면(문 쪽 벽에 붙으면) 창고로 넘어감
+# cell_bg.png 기준 (left, top, right, bottom), 위에서부터의 픽셀 좌표. 위쪽 끝(130)이 위쪽 벽의 아래쪽 끝
+STORAGE_ENTRY_BOX = (830, 130, 898, 140)
 # 쥐가 나타나는 철창 바깥 구역: cell_bg.png 기준 (left, top, right, bottom), 위에서부터의 픽셀 좌표
 RAT_AREAS = [
     (70, 520, 955, 700),   # 아래쪽 복도
@@ -75,6 +79,14 @@ def release_box_content(box):
         potions.append(Potion(content, x, y))
 
 
+def enter_storage():
+    global leaving
+    leaving = True
+    kai.stop()
+    storage_mode.carry_over(kai)  # HP와 에너지를 다음 단계로 넘김
+    game_framework.fade_to(storage_mode)
+
+
 def all_rats_caught():
     # 돌아다니는 쥐가 모두 쓰러졌고, 아직 상자 안에 남아 있는 쥐도 없음
     return (all(rat.is_dead() for rat in rats)
@@ -82,7 +94,7 @@ def all_rats_caught():
 
 
 def init():
-    global background, gate, storage_door, boxes, potions, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
+    global background, gate, storage_door, storage_entry_bb, leaving, boxes, potions, kai, rats, hud, notice, after_notice_time, lights_off, dialogue, dialogue_wait
     hud = ElementHud()
     notice = Notice(MOVE_NOTICE_TEXT, MOVE_NOTICE_HOLD, MOVE_NOTICE_DELAY)
     after_notice_time = 0.0
@@ -93,6 +105,10 @@ def init():
     background = Background(width, height)
     gate = Gate(background)
     storage_door = StorageDoor(background)
+    left, top, right, bottom = STORAGE_ENTRY_BOX
+    storage_entry_bb = (background.to_canvas_x(left), background.to_canvas_y(bottom),
+                        background.to_canvas_x(right), background.to_canvas_y(top))
+    leaving = False  # 창고로 넘어가는 중 (화면이 어두워지는 동안)
     boxes = make_boxes(background)
     potions = []  # 상자에서 나와 바닥에 놓인 물약
     kai = Kai(0, 0)
@@ -177,6 +193,8 @@ def update(frame_time):
     if all_rats_caught():
         storage_door.open()
     storage_door.update(frame_time)
+    if storage_door.is_open() and not leaving and collide(kai.get_bb(), storage_entry_bb):
+        enter_storage()
     for potion in potions:
         potion.update(frame_time, kai)
     potions[:] = [potion for potion in potions if potion.alive]
@@ -208,6 +226,8 @@ def draw():
         for bb, _, _ in game_world.obstacles:
             draw_bb(bb)
         draw_bb(kai.get_bb())
+        if storage_door.is_open():
+            draw_bb(storage_entry_bb)
         for rat in rats:
             draw_bb(rat.get_bb())
             draw_bb(rat.get_hit_bb())

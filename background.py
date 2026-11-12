@@ -34,10 +34,12 @@ OBSTACLES = [
 
 
 class Background:
-    def __init__(self, width, height):
-        self.light_image = load_image('sprite_sheet_bg/cell_bg.png')
-        # 배치는 같고 조명만 꺼진 버전: 충돌 박스는 그대로 사용
-        self.dark_image = load_image('sprite_sheet_bg/cell_dark_bg.png')
+    def __init__(self, width, height, image_path='sprite_sheet_bg/cell_bg.png',
+                 dark_image_path='sprite_sheet_bg/cell_dark_bg.png', obstacles=OBSTACLES):
+        # 배경 그림과 그 위의 충돌 박스 목록. 기본값은 감방(cell_bg.png)
+        self.light_image = load_image(image_path)
+        # 배치는 같고 조명만 꺼진 버전: 충돌 박스는 그대로 사용 (없으면 밝은 그림을 그대로 씀)
+        self.dark_image = load_image(dark_image_path) if dark_image_path else self.light_image
         self.image = self.light_image
         self.width, self.height = width, height
         # 창살 아래쪽 끝의 캔버스 y 좌표: 이보다 위에 발이 있으면 감방 안(창살 뒤)
@@ -45,7 +47,7 @@ class Background:
         # (bb, burnable, on_hit): on_hit은 파이어볼에 맞았을 때 부를 함수 (배경 물체는 없음)
         self.obstacles = [((self.to_canvas_x(left), self.to_canvas_y(bottom),
                             self.to_canvas_x(right), self.to_canvas_y(top)), burnable, None)
-                          for left, top, right, bottom, burnable in OBSTACLES]
+                          for left, top, right, bottom, burnable in obstacles]
 
     def to_canvas_x(self, image_x):
         return image_x * self.width / BG_IMAGE_WIDTH
