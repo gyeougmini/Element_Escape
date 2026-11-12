@@ -20,12 +20,12 @@ def open_option():
 
 def init():
     global image, buttons
-    image = load_image('sprite_sheet_bg/title_bg.png')
+    image = load_image('sprite_sheet/sprite_sheet_bg/title_bg.png')
     width, height = get_canvas_width(), get_canvas_height()
     buttons = [
-        Button('sprite_sheet_bg/title_bg_start.png', 256, 60, width // 2, START_BUTTON_Y, start_game),
-        Button('sprite_sheet_bg/title_bg_quit.png', 256, 60, width // 2, QUIT_BUTTON_Y, game_framework.quit),
-        Button('sprite_sheet_bg/title_bg_option.png', 64, 64,
+        Button('sprite_sheet/sprite_sheet_bg/title_bg_start.png', 256, 60, width // 2, START_BUTTON_Y, start_game),
+        Button('sprite_sheet/sprite_sheet_bg/title_bg_quit.png', 256, 60, width // 2, QUIT_BUTTON_Y, game_framework.quit),
+        Button('sprite_sheet/sprite_sheet_bg/title_bg_option.png', 64, 64,
                width - OPTION_BUTTON_MARGIN, height - OPTION_BUTTON_MARGIN, open_option),
     ]
 

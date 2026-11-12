@@ -66,9 +66,9 @@ KEY_DIRECTIONS = {
 
 class Kai:
     def __init__(self, x, y):
-        self.walk_image = load_image('sprite_sheet_kai/kai_animation_sheet.png')
-        self.idle_image = load_image('sprite_sheet_kai/kai_idle.png')
-        self.ready_image = load_image('sprite_sheet_fire/fire_launch.png')
+        self.walk_image = load_image('sprite_sheet/sprite_sheet_kai/kai_animation_sheet.png')
+        self.idle_image = load_image('sprite_sheet/sprite_sheet_kai/kai_idle.png')
+        self.ready_image = load_image('sprite_sheet/sprite_sheet_fire/fire_launch.png')
         self.x, self.y = x, y
         self.dir_x, self.dir_y = 0, 0
         # 눌려 있는 방향키: 눌림을 못 받은 키의 뗌 신호가 와도 방향이 틀어지지 않도록 직접 기록

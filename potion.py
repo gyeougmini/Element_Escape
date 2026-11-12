@@ -13,8 +13,8 @@ PICKUP_HEIGHT = 14
 
 # 종류별 (이미지, 회복량)
 POTIONS = {
-    'hp': ('sprit_sheet_object/potion_hp.png', 30),
-    'ep': ('sprit_sheet_object/potion_ep.png', 30),
+    'hp': ('sprite_sheet/sprit_sheet_object/potion_hp.png', 30),
+    'ep': ('sprite_sheet/sprit_sheet_object/potion_ep.png', 30),
 }
 
 

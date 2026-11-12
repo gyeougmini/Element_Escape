@@ -2,7 +2,7 @@ from pico2d import *
 
 # storage_door_sheet.png: 80x52 프레임 16개 (cell_dark_bg.png의 창고 문 자리에 딱 맞는 크기)
 # 0: 닫힌 문(배경과 같음) / 1~15: 경고등이 깜빡이며 문이 열림 / 15: 다 열린 문 (창고 안이 보임)
-DOOR_IMAGE = 'sprit_sheet_object/storage_door_sheet.png'
+DOOR_IMAGE = 'sprite_sheet/sprit_sheet_object/storage_door_sheet.png'
 FRAME_WIDTH, FRAME_HEIGHT = 80, 52
 LAST_FRAME = 15
 OPEN_FPS = 10

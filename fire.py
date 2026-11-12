@@ -38,7 +38,7 @@ class Fireball:
 
     def __init__(self, x, y, dir_x, dir_y):
         if Fireball.image is None:
-            Fireball.image = load_image('sprite_sheet_fire/fireball_sheet.png')
+            Fireball.image = load_image('sprite_sheet/sprite_sheet_fire/fireball_sheet.png')
         # (x, y)는 이미지가 그려지는 중심
         self.x, self.y = x, y
         # 날아가는 각도에 가장 가까운 45도 방향의 행을 사용
@@ -112,13 +112,13 @@ class OneShotEffect:
 
 class FireLaunch(OneShotEffect):
     def __init__(self, x, y):
-        super().__init__('sprite_sheet_fire/fire_launch.png', x, y,
+        super().__init__('sprite_sheet/sprite_sheet_fire/fire_launch.png', x, y,
                          LAUNCH_SIZE, LAUNCH_FRAMES, LAUNCH_FPS)
 
 
 class FireImpact(OneShotEffect):
     def __init__(self, x, y):
-        super().__init__('sprite_sheet_fire/fire_impact.png', x, y,
+        super().__init__('sprite_sheet/sprite_sheet_fire/fire_impact.png', x, y,
                          IMPACT_SIZE, IMPACT_FRAMES, IMPACT_FPS)
 
 
@@ -127,7 +127,7 @@ class Burning:
 
     def __init__(self, x, y):
         if Burning.image is None:
-            Burning.image = load_image('sprite_sheet_fire/burning.png')
+            Burning.image = load_image('sprite_sheet/sprite_sheet_fire/burning.png')
         self.x, self.y = x, y
         self.time = 0.0
         self.alive = True

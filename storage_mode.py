@@ -8,7 +8,7 @@ from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 
 # 창고(storage_bg.png): 감방에서 창고 문으로 들어오면 나오는 다음 단계
-STORAGE_IMAGE = 'sprite_sheet_bg/storage_bg.png'
+STORAGE_IMAGE = 'sprite_sheet/sprite_sheet_bg/storage_bg.png'
 # 통과할 수 없는 벽과 물체: storage_bg.png 기준 (left, top, right, bottom), 위에서부터의 픽셀 좌표
 STORAGE_OBSTACLES = [
     # 외벽

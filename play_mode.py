@@ -45,8 +45,8 @@ DIALOGUE_MARGIN = 40  # 화면 오른쪽 아래 모서리에서 대화창까지�
 def make_arc_dialogue():
     width = get_canvas_width()
     box_w, box_h = 416 * DIALOGUE_SCALE, 176 * DIALOGUE_SCALE
-    box = DialogueBox('sprite_sheet_dialugue/dialogue_skyblue_box.png',
-                      'sprite_sheet_dialugue/dialogue_skyblue_arrow.png',
+    box = DialogueBox('sprite_sheet/sprite_sheet_dialugue/dialogue_skyblue_box.png',
+                      'sprite_sheet/sprite_sheet_dialugue/dialogue_skyblue_arrow.png',
                       width - DIALOGUE_MARGIN - box_w / 2, DIALOGUE_MARGIN + box_h / 2,
                       DIALOGUE_SCALE, LEFT_SLANT_LAYOUT)
     box.set_text(BLACKOUT_TEXT)

@@ -16,8 +16,8 @@ DIALOGUE_MARGIN = 40  # 화면 왼쪽 아래 모서리에서 대화창까지의 
 def init():
     global dialogue, line_index
     box_w, box_h = 416 * DIALOGUE_SCALE, 176 * DIALOGUE_SCALE
-    dialogue = DialogueBox('sprite_sheet_dialugue/dialogue_red_box.png',
-                           'sprite_sheet_dialugue/dialogue_red_arrow_.png',
+    dialogue = DialogueBox('sprite_sheet/sprite_sheet_dialugue/dialogue_red_box.png',
+                           'sprite_sheet/sprite_sheet_dialugue/dialogue_red_arrow_.png',
                            DIALOGUE_MARGIN + box_w / 2, DIALOGUE_MARGIN + box_h / 2, DIALOGUE_SCALE)
     line_index = 0
     dialogue.set_text(LINES[line_index])

@@ -1,9 +1,9 @@
 from pico2d import *
 
-LIGHT_IMAGE = 'sprit_sheet_object/bars_gate.png'
+LIGHT_IMAGE = 'sprite_sheet/sprit_sheet_object/bars_gate.png'
 # 1024x768 프레임이 4열로 배치된 시트 (14프레임 사용)
 # 0: 원래 자물쇠 / 1~3: 점점 달아오름 / 4~7: 자물쇠가 녹아 사라짐 / 8~13: 문이 열림
-DARK_SHEET = 'sprit_sheet_object/bars_gate_dark_sheet.png'
+DARK_SHEET = 'sprite_sheet/sprit_sheet_object/bars_gate_dark_sheet.png'
 FRAME_WIDTH, FRAME_HEIGHT = 1024, 768
 SHEET_COLS = 4
 SHEET_HEIGHT = 3072

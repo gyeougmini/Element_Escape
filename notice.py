@@ -5,7 +5,7 @@ from sdl2.sdlttf import TTF_SizeUTF8
 
 from dialogue import FONT_PATH
 
-NOTICE_IMAGE = 'sprite_sheet_dialugue/notice_slide_box.png'
+NOTICE_IMAGE = 'sprite_sheet/sprite_sheet_dialugue/notice_slide_box.png'
 FRAME_WIDTH, FRAME_HEIGHT = 512, 128  # 8프레임: 위에서 내려오며 펼쳐지고 7번 프레임에서 다 나옴
 FRAMES = 8
 SLIDE_FPS = 24

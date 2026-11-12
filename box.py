@@ -2,7 +2,7 @@ from pico2d import *
 
 # burn_box.png: 64x96 프레임 14개
 # 0: 원래 상자 / 1: 불붙음 / 2~5: 활활 탐(반복) / 6: 숯이 된 상자 / 7~8: 무너짐 / 9~12: 재 / 13: 연기
-BOX_IMAGE = 'sprit_sheet_object/burn_box.png'
+BOX_IMAGE = 'sprite_sheet/sprit_sheet_object/burn_box.png'
 FRAME_WIDTH, FRAME_HEIGHT = 64, 96
 # 프레임 안에서 상자 몸체가 차지하는 부분 (위쪽은 불꽃이 들어갈 빈 공간, 아래 6px는 그림자)
 BODY_WIDTH = 52          # x 6~57

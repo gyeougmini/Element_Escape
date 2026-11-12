@@ -34,8 +34,8 @@ OBSTACLES = [
 
 
 class Background:
-    def __init__(self, width, height, image_path='sprite_sheet_bg/cell_bg.png',
-                 dark_image_path='sprite_sheet_bg/cell_dark_bg.png', obstacles=OBSTACLES):
+    def __init__(self, width, height, image_path='sprite_sheet/sprite_sheet_bg/cell_bg.png',
+                 dark_image_path='sprite_sheet/sprite_sheet_bg/cell_dark_bg.png', obstacles=OBSTACLES):
         # 배경 그림과 그 위의 충돌 박스 목록. 기본값은 감방(cell_bg.png)
         self.light_image = load_image(image_path)
         # 배치는 같고 조명만 꺼진 버전: 충돌 박스는 그대로 사용 (없으면 밝은 그림을 그대로 씀)

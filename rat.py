@@ -68,7 +68,7 @@ class Rat:
 
     def __init__(self, x, y):
         if Rat.image is None:
-            Rat.image = load_image('sprite_sheet_rat/rat_animation.png')
+            Rat.image = load_image('sprite_sheet/sprite_sheet_rat/rat_animation.png')
         self.x, self.y = x, y
         self.row = random.randint(0, 7)
         self.dir_x, self.dir_y = 0, 0

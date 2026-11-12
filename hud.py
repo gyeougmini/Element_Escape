@@ -2,7 +2,7 @@ from pico2d import *
 
 # 모든 원소 HUD 이미지는 같은 크기(152x144)이며, 바탕(벤 다이어그램) 위에 켜진 부분만 겹쳐 그림
 # 원 배치: 불(위), 물(왼쪽 아래), 전기(오른쪽 아래). 두 원이 겹친 부분이 콤보
-HUD_DIR = 'sprite_sheet_hud/'
+HUD_DIR = 'sprite_sheet/sprite_sheet_hud/'
 BASE_IMAGE = 'element_hud_base.png'
 ELEMENT_IMAGES = {
     'fire': 'element_on_fire.png',
