@@ -6,6 +6,7 @@ from background import Background, WALL, OBJECT
 from box import make_boxes
 from collision import draw_bb, push_out_offset
 from hud import ElementHud
+from ice import IceBlock
 from kai import Kai, DIRECTION_ROWS
 
 # 창고(storage_bg.png): 감방에서 창고 문으로 들어오면 나오는 다음 단계
@@ -35,6 +36,8 @@ STORAGE_BOX_POSITIONS = [
     (634, 583), (686, 583), (738, 583),
 ]
 STORAGE_BOX_CONTENTS = {}
+# 얼음 블록: 냉동 보관 문 앞 서리 위에 한 줄. 같은 기준 (몸체 가운데 x, 몸체 아래쪽 끝 y)
+ICE_POSITIONS = [(492, 235), (544, 235), (596, 235)]
 KAI_START_IMAGE_POS = (160, 630)  # 시작 위치: 왼쪽 아래 입구 안쪽, HP 바에 가리지 않는 높이 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -48,10 +51,10 @@ def carry_over(kai):
 
 
 def update_obstacles():
-    # 상자는 타서 무너지면 지나갈 수 있으므로 배경과 상자의 장애물을 매 프레임 합침
-    box_obstacles = [box.get_obstacle() for box in boxes]
+    # 상자는 타서 무너지고 얼음은 녹으면 지나갈 수 있으므로 배경, 상자, 얼음의 장애물을 매 프레임 합침
+    object_obstacles = [o.get_obstacle() for o in boxes + ices]
     game_world.obstacles = (background.get_obstacles()
-                            + [obstacle for obstacle in box_obstacles if obstacle])
+                            + [obstacle for obstacle in object_obstacles if obstacle])
 
 
 def obstacle_bbs():
@@ -59,10 +62,11 @@ def obstacle_bbs():
 
 
 def init():
-    global background, boxes, kai, hud
+    global background, boxes, ices, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, STORAGE_IMAGE, None, STORAGE_OBSTACLES)
     boxes = make_boxes(background, STORAGE_BOX_POSITIONS, STORAGE_BOX_CONTENTS)
+    ices = [IceBlock(background, x, bottom) for x, bottom in ICE_POSITIONS]
     update_obstacles()
     game_world.hittables = []
     hud = ElementHud()
@@ -98,6 +102,9 @@ def update(frame_time):
     for box in boxes:
         box.update(frame_time)
     boxes[:] = [box for box in boxes if box.alive]  # 다 타서 사라진 상자는 지움
+    for ice in ices:
+        ice.update(frame_time)
+    ices[:] = [ice for ice in ices if ice.alive]  # 다 녹은 얼음은 지움
     update_obstacles()
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     offset = push_out_offset(kai.get_bb(), obstacle_bbs())
@@ -112,7 +119,7 @@ def update(frame_time):
 def draw():
     background.draw()
     # 발(상자는 몸체 아래쪽 끝)이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
-    for actor in sorted([kai] + boxes, key=lambda a: a.foot_y(), reverse=True):
+    for actor in sorted([kai] + boxes + ices, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
