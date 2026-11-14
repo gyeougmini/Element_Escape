@@ -3,7 +3,8 @@ from pico2d import *
 import game_framework
 import game_world
 from background import Background, WALL, OBJECT
-from collision import draw_bb
+from box import make_boxes
+from collision import draw_bb, push_out_offset
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 
@@ -24,6 +25,16 @@ STORAGE_OBSTACLES = [
     (835, 508, 955, 615, OBJECT),  # 비닐로 싼 상자 더미
     (390, 655, 467, 678, OBJECT),  # 손수레
 ]
+# 나무 상자: storage_bg.png 기준 (몸체 가운데 x, 몸체 아래쪽 끝 y). 맞닿은 상자끼리 불이 번짐
+STORAGE_BOX_POSITIONS = [
+    # 입구를 가둔 ㄱ자 줄: 위쪽 가로줄(왼쪽 벽부터) + 오른쪽 세로줄(아래쪽 벽까지).
+    # 하나만 태우면 불이 줄을 따라 번져 길이 열림
+    (90, 460), (142, 460), (194, 460), (246, 460), (298, 460), (350, 460),
+    (350, 520), (350, 580), (350, 640), (350, 700),
+    # 오른쪽 아래 빨간 점선 구역의 한 줄
+    (634, 583), (686, 583), (738, 583),
+]
+STORAGE_BOX_CONTENTS = {}
 KAI_START_IMAGE_POS = (160, 630)  # 시작 위치: 왼쪽 아래 입구 안쪽, HP 바에 가리지 않는 높이 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -36,15 +47,23 @@ def carry_over(kai):
     carried_stats = (kai.hp, kai.energy)
 
 
+def update_obstacles():
+    # 상자는 타서 무너지면 지나갈 수 있으므로 배경과 상자의 장애물을 매 프레임 합침
+    box_obstacles = [box.get_obstacle() for box in boxes]
+    game_world.obstacles = (background.get_obstacles()
+                            + [obstacle for obstacle in box_obstacles if obstacle])
+
+
 def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles]
 
 
 def init():
-    global background, kai, hud
+    global background, boxes, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, STORAGE_IMAGE, None, STORAGE_OBSTACLES)
-    game_world.obstacles = background.get_obstacles()
+    boxes = make_boxes(background, STORAGE_BOX_POSITIONS, STORAGE_BOX_CONTENTS)
+    update_obstacles()
     game_world.hittables = []
     hud = ElementHud()
     kai = Kai(0, 0)
@@ -76,6 +95,15 @@ def handle_events():
 
 
 def update(frame_time):
+    for box in boxes:
+        box.update(frame_time)
+    boxes[:] = [box for box in boxes if box.alive]  # 다 타서 사라진 상자는 지움
+    update_obstacles()
+    # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
+    offset = push_out_offset(kai.get_bb(), obstacle_bbs())
+    if offset:
+        kai.x += offset[0]
+        kai.y += offset[1]
     kai.update(frame_time, obstacle_bbs())
     game_world.update(frame_time)
     hud.update(frame_time, kai)
@@ -83,7 +111,9 @@ def update(frame_time):
 
 def draw():
     background.draw()
-    kai.draw()
+    # 발(상자는 몸체 아래쪽 끝)이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
+    for actor in sorted([kai] + boxes, key=lambda a: a.foot_y(), reverse=True):
+        actor.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
     if show_bbs:

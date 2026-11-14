@@ -72,6 +72,10 @@ class Box:
     def is_burning(self):
         return self.burn_time is not None
 
+    def is_flaming(self):
+        # 불길이 보이는 동안 (불붙음 ~ 활활 탐). 숯이 된 뒤로는 꺼진 것으로 봄
+        return self.is_burning() and self.current_frame() < COLLAPSE_FIRST_FRAME
+
     def ignite(self):
         if not self.is_burning():
             self.burn_time = 0.0
@@ -137,9 +141,10 @@ class Box:
                             self.x, frame_bottom + h / 2, w, h)
 
 
-def make_boxes(background):
-    boxes = [Box(background, x, bottom, BOX_CONTENTS.get(i))
-             for i, (x, bottom) in enumerate(BOX_POSITIONS)]
+def make_boxes(background, positions=BOX_POSITIONS, contents=BOX_CONTENTS):
+    """positions: (몸체 가운데 x, 몸체 아래쪽 끝 y) 목록, contents: positions의 순서 -> 안에 든 것"""
+    boxes = [Box(background, x, bottom, contents.get(i))
+             for i, (x, bottom) in enumerate(positions)]
     for box in boxes:
         box.neighbors = [other for other in boxes if box.is_touching(other)]
     return boxes
