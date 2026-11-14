@@ -9,6 +9,7 @@ from hud import ElementHud
 from ice import IceBlock
 from kai import Kai, DIRECTION_ROWS
 from rat import Rat, spawn_rats
+from storage_door import StorageDoor
 
 # 창고(storage_bg.png): 감방에서 창고 문으로 들어오면 나오는 다음 단계
 STORAGE_IMAGE = 'sprite_sheet/sprite_sheet_bg/storage_bg.png'
@@ -99,10 +100,18 @@ def near_flaming_box(rat):
     return any(box.is_flaming() and collide(reach, box.get_bb()) for box in boxes)
 
 
+def all_rats_caught():
+    # 돌아다니는 쥐가 모두 쓰러졌고, 아직 상자 안에 남아 있는 쥐도 없음
+    return (all(rat.is_dead() for rat in rats)
+            and not any(box.content == 'rat' for box in boxes))
+
+
 def init():
-    global background, boxes, ices, rats, kai, hud
+    global background, exit_door, boxes, ices, rats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, STORAGE_IMAGE, None, STORAGE_OBSTACLES)
+    # 오른쪽 위 간수실 문: 감방의 창고 문과 자리와 그림이 같아서 같은 시트를 씀
+    exit_door = StorageDoor(background)
     boxes = make_boxes(background, STORAGE_BOX_POSITIONS, STORAGE_BOX_CONTENTS)
     ices = [IceBlock(background, x, bottom) for x, bottom in ICE_POSITIONS]
     update_obstacles()
@@ -161,6 +170,9 @@ def update(frame_time):
             rat.ignite()
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 파이어볼에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
+    if all_rats_caught():
+        exit_door.open()
+    exit_door.update(frame_time)
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
     game_world.update(frame_time)
     hud.update(frame_time, kai)
@@ -168,6 +180,7 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    exit_door.draw()
     # 발(상자는 몸체 아래쪽 끝)이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     for actor in sorted([kai] + rats + boxes + ices, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
