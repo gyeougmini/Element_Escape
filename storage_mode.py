@@ -55,6 +55,10 @@ RAT_AREAS = [  # storage_bg.png 기준 (left, top, right, bottom), 위에서부�
 BOX_FIRE_RANGE = 16
 # 얼음 블록: 냉동 보관 문 앞 서리 위에 한 줄. 같은 기준 (몸체 가운데 x, 몸체 아래쪽 끝 y)
 ICE_POSITIONS = [(492, 235), (544, 235), (596, 235)]
+# 간수실 문 바로 앞을 막는 얼음 한 줄: 위쪽 벽(아래쪽 끝 135)에 붙여서 문 앞을 완전히 가림
+# 양옆 틈(파란 드럼통까지 21px, 오른쪽 벽까지 18px)은 카이(30px)와 쥐(24px)의 발보다 좁아 지나갈 수 없으므로
+# 얼음을 녹여야만 문 앞으로 갈 수 있음
+GUARD_ROOM_ICE_POSITIONS = [(812, 195), (864, 195), (916, 195)]
 KAI_START_IMAGE_POS = (160, 630)  # 시작 위치: 왼쪽 아래 입구 안쪽, HP 바에 가리지 않는 높이 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -113,7 +117,7 @@ def init():
     # 오른쪽 위 간수실 문: 감방의 창고 문과 자리와 그림이 같아서 같은 시트를 씀
     exit_door = StorageDoor(background)
     boxes = make_boxes(background, STORAGE_BOX_POSITIONS, STORAGE_BOX_CONTENTS)
-    ices = [IceBlock(background, x, bottom) for x, bottom in ICE_POSITIONS]
+    ices = [IceBlock(background, x, bottom) for x, bottom in ICE_POSITIONS + GUARD_ROOM_ICE_POSITIONS]
     update_obstacles()
     rats = spawn_rats(RAT_COUNT, [to_canvas_box(area) for area in RAT_AREAS], obstacle_bbs())
     game_world.hittables = list(rats)
