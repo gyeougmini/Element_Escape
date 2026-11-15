@@ -2,6 +2,7 @@ from pico2d import *
 
 import game_framework
 import game_world
+import warden_mode
 from background import Background, WALL, OBJECT
 from box import make_boxes
 from collision import collide, draw_bb, push_out_offset
@@ -71,6 +72,9 @@ LOCKS = [
     ((718, 348, 756, 444), (736, 338, 738, 340), (746, 100, 752, 106)),  # 2번
     ((398, 476, 436, 572), (416, 466, 418, 468), (758, 100, 764, 106)),  # 3번
 ]
+# 통제실 문 바로 앞: 문이 다 열린 뒤 카이의 발이 여기에 닿으면(문 쪽 벽에 붙으면) 워든 맵으로 넘어감
+# guardroom_bg.png 기준 (left, top, right, bottom). 위쪽 끝(135)이 위쪽 벽의 아래쪽 끝
+CONTROL_ROOM_ENTRY_BOX = (830, 135, 898, 145)
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -121,16 +125,26 @@ def near_flaming_box(rat):
     return any(box.is_flaming() and collide(reach, box.get_bb()) for box in boxes)
 
 
+def enter_warden_map():
+    global leaving
+    leaving = True
+    kai.stop()
+    warden_mode.carry_over(kai)  # HP와 에너지를 다음 단계로 넘김
+    game_framework.fade_to(warden_mode)
+
+
 def all_unlocked():
     return all(lock.is_unlocked() for lock in locks)
 
 
 def init():
-    global background, exit_door, boxes, ices, locks, potions, rats, kai, hud
+    global background, exit_door, entry_bb, leaving, boxes, ices, locks, potions, rats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, GUARDROOM_IMAGE, None, GUARDROOM_OBSTACLES)
     # 오른쪽 위 통제실 문: 감방의 창고 문과 자리와 그림이 같아서 같은 시트를 씀
     exit_door = StorageDoor(background)
+    entry_bb = to_canvas_box(CONTROL_ROOM_ENTRY_BOX)
+    leaving = False  # 워든 맵으로 넘어가는 중 (화면이 어두워지는 동안)
     boxes = make_boxes(background, GUARDROOM_BOX_POSITIONS, GUARDROOM_BOX_CONTENTS)
     ices = [IceBlock(background, x, bottom) for x, bottom in GUARDROOM_ICE_POSITIONS]
     locks = [TerminalLock(background, *lock) for lock in LOCKS]
@@ -201,6 +215,8 @@ def update(frame_time):
     if all_unlocked():
         exit_door.open()
     exit_door.update(frame_time)
+    if exit_door.is_open() and not leaving and collide(kai.get_bb(), entry_bb):
+        enter_warden_map()
     game_world.update(frame_time)
     hud.update(frame_time, kai)
 
