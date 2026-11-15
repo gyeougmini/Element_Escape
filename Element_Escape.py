@@ -3,7 +3,7 @@ import os
 from pico2d import *
 
 import game_framework
-import storage_mode
+import guardroom_mode
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -11,5 +11,5 @@ WIDTH, HEIGHT = 1280, 720
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 open_canvas(WIDTH, HEIGHT)
-game_framework.run(storage_mode)
+game_framework.run(guardroom_mode)
 close_canvas()
