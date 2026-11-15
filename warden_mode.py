@@ -7,6 +7,7 @@ from collision import draw_bb, push_out_offset
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 from notice import Notice
+from sliding_door import SlidingDoor
 from warden import Warden
 from water_capsule import WaterCapsule
 
@@ -27,6 +28,9 @@ WARDEN_MAP_OBSTACLES = [
 ]
 KAI_START_IMAGE_POS = (864, 650)     # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 WARDEN_START_IMAGE_POS = (512, 420)  # 워든 시작 위치: 바닥의 W-01 원 가운데
+# 오른쪽 위 보일러실 문: 배경에 그려진 두 짝 미닫이 문 (left, top, right, bottom)과 가운데 갈라지는 x
+BOILER_DOOR_BOX = (824, 76, 904, 128)
+BOILER_DOOR_SEAM_X = 864
 # 물의 초능력 알약을 먹었을 때 나오는 안내
 WATER_NOTICE_TEXT = '물의 초능력을 얻었다! 물 공격: E'
 WATER_NOTICE_HOLD = 2.5
@@ -46,7 +50,7 @@ def obstacle_bbs():
 
 
 def init():
-    global background, kai, warden, capsule, notice, hud
+    global background, kai, warden, capsule, boiler_door, notice, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WARDEN_MAP_IMAGE, None, WARDEN_MAP_OBSTACLES)
     game_world.obstacles = background.get_obstacles()
@@ -63,6 +67,7 @@ def init():
     warden.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     game_world.hittables = [warden]  # 파이어볼에 맞는 대상
     capsule = WaterCapsule(background)
+    boiler_door = SlidingDoor(background, BOILER_DOOR_BOX, BOILER_DOOR_SEAM_X)
     notice = None  # 알약을 먹으면 나오는 안내
 
 
@@ -104,9 +109,11 @@ def update(frame_time):
     warden.update(frame_time, obstacle_bbs(), kai)
     warden.touch(kai)
     game_world.hittables = [] if warden.is_dead() else [warden]  # 쓰러지면 파이어볼이 지나감
-    # 워든이 쓰러지는 연출이 끝나면 캡슐 장치의 유리관이 열리고 알약이 나와 떠다님
+    # 워든이 쓰러지는 연출이 끝나면 보일러실 문이 열리고, 캡슐 장치의 유리관이 열려 알약이 나와 떠다님
     if warden.is_death_done():
+        boiler_door.open()
         capsule.open()
+    boiler_door.update(frame_time)
     if capsule.update(frame_time, kai):
         eat_water_pill()
     if notice:
@@ -117,7 +124,8 @@ def update(frame_time):
 
 def draw():
     background.draw()
-    capsule.draw_machine()  # 열리는 유리관 (장치 그림의 일부라서 배경 바로 위에 그림)
+    boiler_door.draw()      # 열리는 보일러실 문과
+    capsule.draw_machine()  # 유리관 (둘 다 벽 그림의 일부라서 배경 바로 위에 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     for actor in sorted([kai, warden, capsule], key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
