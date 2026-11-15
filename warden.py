@@ -104,6 +104,10 @@ class Warden:
     def is_burning(self):
         return self.burn_time > 0
 
+    def is_death_done(self):
+        # 쓰러지는 연출(warden_death.png)을 끝까지 재생했는지
+        return self.is_dead() and self.death_time >= DEATH_FRAMES / DEATH_FPS
+
     def on_fireball_hit(self, dir_x, dir_y, damage):
         # 보스라서 쥐처럼 밀려나지는 않고, 하얗게 번쩍이며 불타는 상태가 됨
         self.take_damage(damage)

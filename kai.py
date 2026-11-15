@@ -83,6 +83,7 @@ class Kai:
         self.fire_dir = (0, -1)  # 파이어볼이 날아갈 방향 (길이 1)
         # E/R로 켜는 물/전기 준비 상태 (아직 공격은 없고 HUD 표시만)
         self.water_ready = False
+        self.water_unlocked = False  # 물의 초능력 알약을 먹었는지
         self.electric_ready = False
         self.max_hp = self.hp = KAI_HP
         self.max_energy = self.energy = KAI_ENERGY

@@ -6,7 +6,9 @@ from background import Background, WALL, OBJECT
 from collision import draw_bb, push_out_offset
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
+from notice import Notice
 from warden import Warden
+from water_capsule import WaterCapsule
 
 # 워든 맵(warden_bg.png): 간수실에서 통제실 문으로 들어오면 나오는 보스 단계
 WARDEN_MAP_IMAGE = 'sprite_sheet/sprite_sheet_bg/warden_bg.png'
@@ -25,6 +27,9 @@ WARDEN_MAP_OBSTACLES = [
 ]
 KAI_START_IMAGE_POS = (864, 650)     # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 WARDEN_START_IMAGE_POS = (512, 420)  # 워든 시작 위치: 바닥의 W-01 원 가운데
+# 물의 초능력 알약을 먹었을 때 나오는 안내
+WATER_NOTICE_TEXT = '물의 초능력을 얻었다! 물 공격: E'
+WATER_NOTICE_HOLD = 2.5
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 carried_stats = None  # 이전 단계에서 넘겨받은 (HP, 에너지), 없으면 처음 값
@@ -41,7 +46,7 @@ def obstacle_bbs():
 
 
 def init():
-    global background, kai, warden, hud
+    global background, kai, warden, capsule, notice, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WARDEN_MAP_IMAGE, None, WARDEN_MAP_OBSTACLES)
     game_world.obstacles = background.get_obstacles()
@@ -57,6 +62,8 @@ def init():
     start_x, start_y = WARDEN_START_IMAGE_POS
     warden.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     game_world.hittables = [warden]  # 파이어볼에 맞는 대상
+    capsule = WaterCapsule(background)
+    notice = None  # 알약을 먹으면 나오는 안내
 
 
 def finish():
@@ -79,6 +86,12 @@ def handle_events():
             kai.handle_event(event)
 
 
+def eat_water_pill():
+    global notice
+    kai.water_unlocked = True
+    notice = Notice(WATER_NOTICE_TEXT, WATER_NOTICE_HOLD)
+
+
 def update(frame_time):
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     for actor in (kai, warden):
@@ -91,17 +104,27 @@ def update(frame_time):
     warden.update(frame_time, obstacle_bbs(), kai)
     warden.touch(kai)
     game_world.hittables = [] if warden.is_dead() else [warden]  # 쓰러지면 파이어볼이 지나감
+    # 워든이 쓰러지는 연출이 끝나면 캡슐 장치의 유리관이 열리고 알약이 나와 떠다님
+    if warden.is_death_done():
+        capsule.open()
+    if capsule.update(frame_time, kai):
+        eat_water_pill()
+    if notice:
+        notice.update(frame_time)
     game_world.update(frame_time)
     hud.update(frame_time, kai)
 
 
 def draw():
     background.draw()
+    capsule.draw_machine()  # 열리는 유리관 (장치 그림의 일부라서 배경 바로 위에 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
-    for actor in sorted([kai, warden], key=lambda a: a.foot_y(), reverse=True):
+    for actor in sorted([kai, warden, capsule], key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
+    if notice:
+        notice.draw()
     if show_bbs:
         for bb in obstacle_bbs():
             draw_bb(bb)
@@ -109,3 +132,5 @@ def draw():
         draw_bb(warden.get_bb())
         draw_bb(warden.get_hit_bb())
         warden.draw_dash_range()
+        if capsule.is_floating():
+            draw_bb(capsule.get_bb())
