@@ -34,11 +34,17 @@ FIREBALL_ROW_COUNT = 8
 
 
 class Fireball:
-    image = None
+    # 물 공격(water.py의 WaterBall)이 이 클래스를 이어받아 그림, 속도, 피해, 맞았을 때의 반응만 바꿈
+    image = None  # 클래스마다 따로 불러옴 (이어받는 클래스도 image = None을 따로 가져야 함)
+    IMAGE_PATH = 'sprite_sheet/sprite_sheet_fire/fireball_sheet.png'
+    SPEED = FIREBALL_SPEED
+    DAMAGE = FIREBALL_DAMAGE
+    FPS = FIREBALL_FPS
 
     def __init__(self, x, y, dir_x, dir_y):
-        if Fireball.image is None:
-            Fireball.image = load_image('sprite_sheet/sprite_sheet_fire/fireball_sheet.png')
+        cls = type(self)
+        if cls.image is None:
+            cls.image = load_image(cls.IMAGE_PATH)
         # (x, y)는 이미지가 그려지는 중심
         self.x, self.y = x, y
         # 날아가는 각도에 가장 가까운 45도 방향의 행을 사용
@@ -46,8 +52,8 @@ class Fireball:
         self.row = round(angle / 45) % FIREBALL_ROW_COUNT
         length = math.hypot(dir_x, dir_y)
         self.dir_x, self.dir_y = dir_x / length, dir_y / length
-        self.vx = self.dir_x * FIREBALL_SPEED
-        self.vy = self.dir_y * FIREBALL_SPEED
+        self.vx = self.dir_x * self.SPEED
+        self.vy = self.dir_y * self.SPEED
         self.anim_time = 0.0
         self.alive = True
 
@@ -63,28 +69,33 @@ class Fireball:
         self.y += self.vy * frame_time
         for target in game_world.hittables:
             if collide(self.get_bb(), target.get_hit_bb()):
-                self.alive = False
-                game_world.add(FireImpact(self.x, self.y))
-                target.on_fireball_hit(self.dir_x, self.dir_y, FIREBALL_DAMAGE)
+                self.hit_target(target)
                 return
         for bb, burnable, on_hit in game_world.obstacles:
             if collide(self.get_bb(), bb):
                 self.hit(burnable, on_hit)
                 return
 
+    def hit_target(self, target):
+        # 캐릭터(쥐, 워든)에 맞음
+        self.alive = False
+        game_world.add(FireImpact(self.x, self.y))
+        target.on_fireball_hit(self.dir_x, self.dir_y, self.DAMAGE)
+
     def hit(self, burnable, on_hit):
+        # 벽이나 물체에 맞음
         self.alive = False
         game_world.add(FireImpact(self.x, self.y))
         # 맞은 물체가 직접 반응을 처리하면(예: 자물쇠가 달아오름) 불꽃은 남기지 않음
-        handled = on_hit(FIREBALL_DAMAGE) if on_hit else False
+        handled = on_hit(self.DAMAGE) if on_hit else False
         if burnable and not handled:
             game_world.add(Burning(self.x, self.y))
 
     def draw(self):
-        col = int(self.anim_time * FIREBALL_FPS) % FIREBALL_FRAMES
-        Fireball.image.clip_draw(col * FIREBALL_SIZE,
-                                 FIREBALL_SHEET_HEIGHT - (self.row + 1) * FIREBALL_SIZE,
-                                 FIREBALL_SIZE, FIREBALL_SIZE, self.x, self.y)
+        col = int(self.anim_time * self.FPS) % FIREBALL_FRAMES
+        self.image.clip_draw(col * FIREBALL_SIZE,
+                             FIREBALL_SHEET_HEIGHT - (self.row + 1) * FIREBALL_SIZE,
+                             FIREBALL_SIZE, FIREBALL_SIZE, self.x, self.y)
 
 
 class OneShotEffect:

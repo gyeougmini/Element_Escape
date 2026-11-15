@@ -3,7 +3,8 @@
 
 objects = []
 obstacles = []  # (bb, burnable, on_hit(damage)) 목록. play_mode가 매 프레임 채움
-# 파이어볼에 맞는 캐릭터 목록: get_hit_bb(), on_fireball_hit(dir_x, dir_y, damage) 를 가짐
+# 파이어볼/물 공격에 맞는 캐릭터 목록: get_hit_bb(), on_fireball_hit(dir_x, dir_y, damage),
+# on_water_hit(dir_x, dir_y, damage) 를 가짐
 hittables = []
 
 

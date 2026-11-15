@@ -103,6 +103,18 @@ class Rat:
         if not self.is_dead():
             self.ignite()
 
+    def on_water_hit(self, dir_x, dir_y, damage):
+        # 물 공격: 파이어볼처럼 밀려나며 피해를 받지만, 불이 붙지 않고 불타던 중이면 불이 꺼짐
+        self.hp = max(0, self.hp - damage)
+        self.knockback_dir = (dir_x, dir_y)
+        self.knockback_time = KNOCKBACK_TIME
+        self.extinguish()
+
+    def extinguish(self):
+        # 불타는 상태를 끝냄: 남은 지속 피해는 받지 않음
+        self.burn_time = 0.0
+        self.burn_damage_left = 0.0
+
     def ignite(self):
         """'불타는' 상태로 만듦. 이미 불타는 중이어도 이전 지속 피해는 버리고 3초를 처음부터 다시 셈"""
         self.burn_time = BURN_TIME

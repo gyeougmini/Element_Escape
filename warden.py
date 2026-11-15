@@ -116,6 +116,13 @@ class Warden:
             self.burn_time = BURN_TIME
             self.burn_damage_left = BURN_DAMAGE
 
+    def on_water_hit(self, dir_x, dir_y, damage):
+        # 물 공격: 하얗게 번쩍이며 피해를 받고, 불타던(과열) 중이면 식음
+        self.take_damage(damage)
+        self.flash_time = HIT_FLASH_TIME
+        self.burn_time = 0.0
+        self.burn_damage_left = 0.0
+
     def take_damage(self, damage):
         self.hp = max(0, self.hp - damage)
         if self.hp < 1e-6:  # 소수 계산 오차로 HP가 0에 아주 가깝게 남는 것을 막음
