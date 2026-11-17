@@ -1,6 +1,6 @@
 from pico2d import *
 
-FONT_PATH = 'C:/Windows/Fonts/malgun.ttf'  # 맑은 고딕 (한글 표시용)
+FONT_PATH = 'font/DungGeunMo.ttf'  # 둥근모 (픽셀 글꼴, 한글 포함)
 FONT_SIZE = 26
 TEXT_COLOR = (235, 235, 235)
 LINE_SPACING = 40
