@@ -9,8 +9,9 @@ NOTICE_IMAGE = 'sprite_sheet/sprite_sheet_dialugue/notice_slide_box.png'
 FRAME_WIDTH, FRAME_HEIGHT = 512, 128  # 8프레임: 위에서 내려오며 펼쳐지고 7번 프레임에서 다 나옴
 FRAMES = 8
 SLIDE_FPS = 24
-TEXT_CENTER_Y = 60   # 다 펼쳐진 상자 안에서 글자 중심의 y (프레임 위쪽 기준 픽셀)
+TEXT_CENTER_Y = 60   # 다 펼쳐진 상자 안에서 글자(여러 줄이면 전체) 중심의 y (프레임 위쪽 기준 픽셀)
 FONT_SIZE = 28
+LINE_SPACING = 34    # 문구에 '\n'이 있을 때 줄 사이 간격
 TEXT_COLOR = (235, 235, 235)
 
 
@@ -56,8 +57,14 @@ class Notice:
         self.image.clip_draw(frame * FRAME_WIDTH, 0, FRAME_WIDTH, FRAME_HEIGHT,
                              x, top - FRAME_HEIGHT / 2)
         if frame == FRAMES - 1:
-            # pico2d의 font.draw는 x가 글자 왼쪽 끝이므로 글자 폭을 재서 가운데 정렬
-            text_w, text_h = ctypes.c_int(), ctypes.c_int()
-            TTF_SizeUTF8(Notice.font.font, self.text.encode('utf-8'),
-                         ctypes.byref(text_w), ctypes.byref(text_h))
-            Notice.font.draw(x - text_w.value / 2, top - TEXT_CENTER_Y, self.text, TEXT_COLOR)
+            # pico2d의 font.draw는 줄바꿈을 못 하므로 '\n'으로 나눠 한 줄씩 그림. 여러 줄이면 묶음 전체가 가운데에 오게 함
+            lines = self.text.split('\n')
+            first_y = top - TEXT_CENTER_Y + (len(lines) - 1) * LINE_SPACING / 2
+            for i, line in enumerate(lines):
+                if not line:
+                    continue  # pico2d는 빈 문자열을 그리면 오류가 남
+                # font.draw는 x가 글자 왼쪽 끝이므로 글자 폭을 재서 가운데 정렬
+                text_w, text_h = ctypes.c_int(), ctypes.c_int()
+                TTF_SizeUTF8(Notice.font.font, line.encode('utf-8'),
+                             ctypes.byref(text_w), ctypes.byref(text_h))
+                Notice.font.draw(x - text_w.value / 2, first_y - i * LINE_SPACING, line, TEXT_COLOR)

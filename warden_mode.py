@@ -32,7 +32,7 @@ WARDEN_START_IMAGE_POS = (512, 420)  # 워든 시작 위치: 바닥의 W-01 원 
 BOILER_DOOR_BOX = (824, 76, 904, 128)
 BOILER_DOOR_SEAM_X = 864
 # 물의 초능력 알약을 먹었을 때 나오는 안내
-WATER_NOTICE_TEXT = '물의 초능력을 얻었다! 물 공격: E'
+WATER_NOTICE_TEXT = '물의 초능력을 얻었다!\n물 공격: E'
 WATER_NOTICE_HOLD = 2.5
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
