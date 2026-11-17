@@ -3,7 +3,7 @@ import os
 from pico2d import *
 
 import game_framework
-import title_mode
+import warden_mode
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -11,5 +11,5 @@ WIDTH, HEIGHT = 1280, 720
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 open_canvas(WIDTH, HEIGHT)
-game_framework.run(title_mode)
+game_framework.run(warden_mode)
 close_canvas()
