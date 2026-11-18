@@ -1,9 +1,10 @@
 from pico2d import *
 
+import boiler_mode
 import game_framework
 import game_world
 from background import Background, WALL, OBJECT
-from collision import draw_bb, push_out_offset
+from collision import collide, draw_bb, push_out_offset
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 from notice import Notice
@@ -31,6 +32,9 @@ WARDEN_START_IMAGE_POS = (512, 420)  # 워든 시작 위치: 바닥의 W-01 원 
 # 오른쪽 위 보일러실 문: 배경에 그려진 두 짝 미닫이 문 (left, top, right, bottom)과 가운데 갈라지는 x
 BOILER_DOOR_BOX = (824, 76, 904, 128)
 BOILER_DOOR_SEAM_X = 864
+# 보일러실 문 바로 앞: 문이 다 열린 뒤 카이의 발이 여기에 닿으면(문 쪽 벽에 붙으면) 보일러실로 넘어감
+# 위쪽 끝(135)이 위쪽 벽의 아래쪽 끝
+BOILER_ENTRY_BOX = (830, 135, 898, 145)
 # 물의 초능력 알약을 먹었을 때 나오는 안내
 WATER_NOTICE_TEXT = '물의 초능력을 얻었다!\n물 공격: E'
 WATER_NOTICE_HOLD = 2.5
@@ -50,7 +54,7 @@ def obstacle_bbs():
 
 
 def init():
-    global background, kai, warden, capsule, boiler_door, notice, hud
+    global background, kai, warden, capsule, boiler_door, entry_bb, leaving, notice, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WARDEN_MAP_IMAGE, None, WARDEN_MAP_OBSTACLES)
     game_world.obstacles = background.get_obstacles()
@@ -68,6 +72,10 @@ def init():
     game_world.hittables = [warden]  # 파이어볼에 맞는 대상
     capsule = WaterCapsule(background)
     boiler_door = SlidingDoor(background, BOILER_DOOR_BOX, BOILER_DOOR_SEAM_X)
+    left, top, right, bottom = BOILER_ENTRY_BOX
+    entry_bb = (background.to_canvas_x(left), background.to_canvas_y(bottom),
+                background.to_canvas_x(right), background.to_canvas_y(top))
+    leaving = False  # 보일러실로 넘어가는 중 (화면이 어두워지는 동안)
     notice = None  # 알약을 먹으면 나오는 안내
 
 
@@ -97,6 +105,14 @@ def eat_water_pill():
     notice = Notice(WATER_NOTICE_TEXT, WATER_NOTICE_HOLD)
 
 
+def enter_boiler_room():
+    global leaving
+    leaving = True
+    kai.stop()
+    boiler_mode.carry_over(kai)  # HP, 에너지, 물의 초능력을 다음 단계로 넘김
+    game_framework.fade_to(boiler_mode)
+
+
 def update(frame_time):
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     for actor in (kai, warden):
@@ -114,6 +130,8 @@ def update(frame_time):
         boiler_door.open()
         capsule.open()
     boiler_door.update(frame_time)
+    if boiler_door.is_open() and not leaving and collide(kai.get_bb(), entry_bb):
+        enter_boiler_room()
     if capsule.update(frame_time, kai):
         eat_water_pill()
     if notice:
@@ -142,3 +160,5 @@ def draw():
         warden.draw_dash_range()
         if capsule.is_floating():
             draw_bb(capsule.get_bb())
+        if boiler_door.is_open():
+            draw_bb(entry_bb)
