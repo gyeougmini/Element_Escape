@@ -5,6 +5,7 @@ from pico2d import *
 import game_framework
 import game_world
 from background import Background, WALL, OBJECT
+from bat import spawn_bats
 from collision import collide, draw_bb, push_out_offset
 from flame import Flame
 from hud import ElementHud
@@ -46,10 +47,17 @@ RAT_AREAS = [  # boiler_bg.png 기준 (left, top, right, bottom)
 # 파이어볼에 맞은 것처럼 FLAME_DAMAGE만큼 피해를 받고 불길 반대쪽으로 밀려나며 불이 붙음
 FLAME_RANGE = 16
 FLAME_DAMAGE = 10
+# 박쥐: 날아다니므로 방벽 위아래 어디에든 무작위로 3마리. 방 안쪽 바닥 범위 안에서만 날아다님
+BAT_COUNT = 3
+BAT_AREAS = [(90, 200, 940, 680)]      # 처음 놓이는 범위 (boiler_bg.png 기준 (left, top, right, bottom))
+BAT_BOUNDS = (70, 150, 954, 694)       # 날아다닐 수 있는 범위 (그림자 가운데 기준)
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
 carried_stats = None  # 이전 단계에서 넘겨받은 (HP, 에너지, 물의 초능력을 얻었는지), 없으면 처음 값
+# 디버깅용: 이전 단계 없이 보일러실부터 시작하면(Element_Escape.py에서 바로 실행) 물 공격을 가진 상태로 시작
+# 워든 맵을 거쳐 들어오면 넘겨받은 값을 그대로 쓰므로 실제 게임 흐름에는 영향이 없음
+DEBUG_START_WITH_WATER = True
 
 
 def carry_over(kai):
@@ -95,17 +103,21 @@ def obstacle_bbs():
 
 
 def init():
-    global background, flames, rats, kai, hud
+    global background, flames, rats, bats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, BOILER_IMAGE, None, BOILER_OBSTACLES)
     flames = [Flame(background, box) for box in FLAME_BOXES]
     update_obstacles()
     rats = spawn_rats(RAT_COUNT, [to_canvas_box(area) for area in RAT_AREAS], obstacle_bbs())
-    game_world.hittables = list(rats)
+    start = (background.to_canvas_x(KAI_START_IMAGE_POS[0]), background.to_canvas_y(KAI_START_IMAGE_POS[1]))
+    bats = spawn_bats(BAT_COUNT, [to_canvas_box(area) for area in BAT_AREAS], to_canvas_box(BAT_BOUNDS), start)
+    game_world.hittables = rats + bats
     hud = ElementHud()
     kai = Kai(0, 0)
     if carried_stats:
         kai.hp, kai.energy, kai.water_unlocked = carried_stats
+    elif DEBUG_START_WITH_WATER:
+        kai.water_unlocked = True
     start_x, start_y = KAI_START_IMAGE_POS
     kai.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     kai.row = DIRECTION_ROWS[(0, 1)]  # 입구에서 안쪽(위)을 바라봄
@@ -137,7 +149,8 @@ def update(frame_time):
     flames[:] = [flame for flame in flames if flame.alive]  # 다 꺼진 불길은 지움
     update_obstacles()
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
-    for actor in [kai] + rats:
+    # (날고 있는 박쥐는 벽 위에 있어도 되므로 바닥에 떨어진 박쥐만)
+    for actor in [kai] + rats + [bat for bat in bats if not bat.is_flying()]:
         offset = push_out_offset(actor.get_bb(), obstacle_bbs())
         if offset:
             actor.x += offset[0]
@@ -151,9 +164,19 @@ def update(frame_time):
             flame = touching_flame(rat)
             if flame:
                 burn_by_flame(rat, flame)
-    # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 공격에 맞도록 함
+    # 박쥐: 날 때는 벽 위로도 다니고, 물에 맞아 바닥에 떨어지면 벽에 막히며 느려짐
+    for bat in bats:
+        bat.update(frame_time, obstacle_bbs(), kai)
+        bat.touch(kai)
+        # 바닥에 떨어진 박쥐도 불길에 닿으면 덴다 (날고 있으면 불길 위를 지나감)
+        if not bat.is_dead() and not bat.is_flying() and not bat.is_knocked_back():
+            flame = touching_flame(bat)
+            if flame:
+                burn_by_flame(bat, flame)
+    # 쓰러지는 연출이 끝난 적은 지우고, HP가 남은 적만 공격에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
-    game_world.hittables = [rat for rat in rats if not rat.is_dead()]
+    bats[:] = [bat for bat in bats if bat.alive]
+    game_world.hittables = [enemy for enemy in rats + bats if not enemy.is_dead()]
     game_world.update(frame_time)
     hud.update(frame_time, kai)
 
@@ -161,15 +184,19 @@ def update(frame_time):
 def draw():
     background.draw()
     # 발(불길은 아래쪽 끝)이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
-    for actor in sorted([kai] + rats + flames, key=lambda a: a.foot_y(), reverse=True):
+    # 날고 있는 박쥐는 공중에 있으므로 모든 것 위에 그림
+    grounded = [kai] + rats + flames + [bat for bat in bats if not bat.is_flying()]
+    for actor in sorted(grounded, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
+    for bat in sorted([bat for bat in bats if bat.is_flying()], key=lambda a: a.foot_y(), reverse=True):
+        bat.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
     if show_bbs:
         for bb in obstacle_bbs():
             draw_bb(bb)
         draw_bb(kai.get_bb())
-        for rat in rats:
-            draw_bb(rat.get_bb())
-            draw_bb(rat.get_hit_bb())
-            rat.draw_chase_range()
+        for enemy in rats + bats:
+            draw_bb(enemy.get_bb())
+            draw_bb(enemy.get_hit_bb())
+            enemy.draw_chase_range()
