@@ -3,13 +3,14 @@ import random
 
 from pico2d import *
 
+import steam
 from collision import collide, collide_any
 
-# bat_animation_alpha.png: bat_animation.png의 단색 배경(90, 84, 77)을 투명하게 바꾼 시트
+# bat_animation.png: 배경이 투명한 시트
 # 21열 x 8행(2688x1024), 프레임 128x128. 행(방향)은 카이 시트와 같은 순서
 # 0~3열 날기 / 4열 경계 / 5~6열 돌진 / 7열 활공 / 8열 맞음 / 9~12열 물에 젖어 바닥에 떨어짐
 # 13~16열 불타며 날기 / 17~20열 전기 (경계, 돌진, 활공, 전기는 아직 사용하지 않음)
-BAT_IMAGE = 'sprite_sheet/sprite_sheet_bat/bat_animation_alpha.png'
+BAT_IMAGE = 'sprite_sheet/sprite_sheet_bat/bat_animation.png'
 FRAME_SIZE = 128
 SHEET_HEIGHT = 1024
 BAT_SCALE = 0.6      # 그림 크기 배율: 아래의 그림자/몸통 박스, 흔들림 폭도 이 배율에 맞춰 줄어듦
@@ -81,6 +82,7 @@ class Bat:
         self.hp = BAT_HP
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
+        self.knockback_speed, self.knockback_duration = KNOCKBACK_SPEED, KNOCKBACK_TIME
         self.burn_time = 0.0
         self.burn_damage_left = 0.0
         self.wet_time = 0.0
@@ -131,20 +133,37 @@ class Bat:
             self.burn_time = 0.0
             self.wet_time = 0.0
 
-    def knock_back(self, dir_x, dir_y):
+    def knock_back(self, dir_x, dir_y, speed=KNOCKBACK_SPEED, duration=KNOCKBACK_TIME):
         self.knockback_dir = (dir_x, dir_y)
-        self.knockback_time = KNOCKBACK_TIME
+        self.knockback_speed, self.knockback_duration = speed, duration
+        self.knockback_time = duration
+
+    def steam_explode(self, dir_x, dir_y):
+        # 증기 폭발: 보통보다 멀리 밀려나고 폭발 연출이 나옴 (상태를 푸는 것은 부른 쪽에서)
+        self.knock_back(dir_x, dir_y, steam.KNOCKBACK_SPEED, steam.KNOCKBACK_TIME)
+        steam.explode_at(self.get_hit_bb())
 
     def on_fireball_hit(self, dir_x, dir_y, damage):
-        # 불 공격: 밀려나며 피해를 받고 공중에서 불타는 상태가 됨. 바닥에 떨어져 있었으면 말라서 다시 날아오름
+        # 불 공격: 밀려나며 피해를 받고 공중에서 불타는 상태가 됨
+        # 젖어서 바닥에 떨어져 있었으면 증기 폭발: 젖음이 풀려(말라서) 다시 날아오르지만 불은 붙지 않음
         self.take_damage(damage)
+        if self.is_wet() and not self.is_dead():
+            self.wet_time = 0.0
+            self.steam_explode(dir_x, dir_y)
+            return
         self.knock_back(dir_x, dir_y)
         if not self.is_dead():
             self.ignite()
 
     def on_water_hit(self, dir_x, dir_y, damage):
-        # 물 공격: 밀려나며 피해를 받고, 불이 꺼지며, 젖어서 바닥으로 떨어짐
+        # 물 공격: 밀려나며 피해를 받고, 젖어서 바닥으로 떨어짐
+        # 불타고 있었으면 증기 폭발: 불만 꺼지고 젖지 않으므로 계속 날아다님
         self.take_damage(damage)
+        if self.is_burning() and not self.is_dead():
+            self.burn_time = 0.0
+            self.burn_damage_left = 0.0
+            self.steam_explode(dir_x, dir_y)
+            return
         self.knock_back(dir_x, dir_y)
         self.burn_time = 0.0
         self.burn_damage_left = 0.0
@@ -209,7 +228,7 @@ class Bat:
             return
         self.wet_time = max(0.0, self.wet_time - frame_time)
         if self.is_knocked_back():
-            speed = KNOCKBACK_SPEED * self.knockback_time / KNOCKBACK_TIME
+            speed = self.knockback_speed * self.knockback_time / self.knockback_duration
             dx, dy = self.knockback_dir
             self.move(dx * speed * frame_time, dy * speed * frame_time, obstacles)
             self.knockback_time -= frame_time

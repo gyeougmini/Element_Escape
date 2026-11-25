@@ -2,6 +2,7 @@ import math
 
 from pico2d import *
 
+import steam
 from collision import collide, collide_any
 
 # warden_sheet.png: 21열 x 8행(2688x1024), 프레임 128x128
@@ -95,6 +96,9 @@ class Warden:
         self.burn_time = 0.0  # 불타는 상태가 남은 시간(초), 0이면 불타지 않음
         self.burn_damage_left = 0.0  # 이번 불타는 상태에서 아직 받지 않은 지속 피해
         self.death_time = None  # 쓰러진 뒤 흐른 시간, None이면 살아 있음
+        # 보통 공격에는 밀려나지 않지만, 증기 폭발에는 밀려남 (밀려나는 동안은 움직이거나 공격하지 않음)
+        self.knockback_dir = (0, 0)
+        self.knockback_time = 0.0
         self.attack_time = None  # 곤봉 공격을 시작한 뒤 흐른 시간, None이면 공격 중이 아님
         self.attack_hit_done = False  # 이번 공격에서 피해를 이미 줬는지
         self.attack_cooldown = 0.0
@@ -135,11 +139,34 @@ class Warden:
             self.burn_damage_left = BURN_DAMAGE
 
     def on_water_hit(self, dir_x, dir_y, damage):
-        # 물 공격: 하얗게 번쩍이며 피해를 받고, 불타던(과열) 중이면 식음
+        # 물 공격: 하얗게 번쩍이며 피해를 받음. 불타던(과열) 중이면 증기 폭발: 불이 꺼지고 멀리 밀려나며 하던 공격도 끊김
+        burning = self.is_burning()
         self.take_damage(damage)
         self.flash_time = HIT_FLASH_TIME
         self.burn_time = 0.0
         self.burn_damage_left = 0.0
+        if burning and not self.is_dead():
+            self.knockback_dir = (dir_x, dir_y)
+            self.knockback_time = steam.KNOCKBACK_TIME
+            self.attack_time = None
+            steam.explode_at(self.get_hit_bb())
+
+    def is_knocked_back(self):
+        return self.knockback_time > 0
+
+    def update_knockback(self, frame_time, obstacles):
+        # 남은 시간에 비례해 속도가 줄어듦. 벽에 막힌 축은 더 밀리지 않음
+        speed = steam.KNOCKBACK_SPEED * self.knockback_time / steam.KNOCKBACK_TIME
+        dx, dy = self.knockback_dir
+        old_x = self.x
+        self.x += dx * speed * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.x = old_x
+        old_y = self.y
+        self.y += dy * speed * frame_time
+        if collide_any(self.get_bb(), obstacles):
+            self.y = old_y
+        self.knockback_time -= frame_time
 
     def take_damage(self, damage):
         self.hp = max(0, self.hp - damage)
@@ -226,6 +253,9 @@ class Warden:
             self.attack_time = None
             return
         self.attack_cooldown = max(0.0, self.attack_cooldown - frame_time)
+        if self.is_knocked_back():
+            self.update_knockback(frame_time, obstacles)
+            return
         if self.is_attacking():
             self.update_attack(frame_time, target)
             return

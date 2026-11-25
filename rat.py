@@ -3,6 +3,7 @@ import random
 
 from pico2d import *
 
+import steam
 from collision import collide, collide_any
 
 # rat_animation.png: 30열 x 8행(1920x512), 프레임 64x64
@@ -82,6 +83,7 @@ class Rat:
         self.anim_time = random.random()  # 쥐마다 걷는 박자가 어긋나도록
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
+        self.knockback_speed, self.knockback_duration = KNOCKBACK_SPEED, KNOCKBACK_TIME
         self.hp = RAT_HP
         self.death_time = 0.0
         self.alive = True  # False가 되면 play_mode가 목록에서 지움
@@ -103,19 +105,36 @@ class Rat:
         return (self.x - HIT_HALF_WIDTH, self.y + HIT_BOTTOM,
                 self.x + HIT_HALF_WIDTH, self.y + HIT_TOP)
 
-    def on_fireball_hit(self, dir_x, dir_y, damage):
-        # dir: 파이어볼이 날아온 방향(길이 1). 맞은 반대편, 즉 파이어볼 진행 방향으로 밀려남
-        self.hp = max(0, self.hp - damage)
+    def knock_back(self, dir_x, dir_y, speed=KNOCKBACK_SPEED, duration=KNOCKBACK_TIME):
+        # dir: 공격이 날아온 방향(길이 1). 맞은 반대편, 즉 공격의 진행 방향으로 밀려남
         self.knockback_dir = (dir_x, dir_y)
-        self.knockback_time = KNOCKBACK_TIME
+        self.knockback_speed, self.knockback_duration = speed, duration
+        self.knockback_time = duration
+
+    def steam_explode(self, dir_x, dir_y):
+        # 증기 폭발: 보통보다 멀리 밀려나고 폭발 연출이 나옴 (상태를 푸는 것은 부른 쪽에서)
+        self.knock_back(dir_x, dir_y, steam.KNOCKBACK_SPEED, steam.KNOCKBACK_TIME)
+        steam.explode_at(self.get_hit_bb())
+
+    def on_fireball_hit(self, dir_x, dir_y, damage):
+        # 불 공격: 밀려나며 피해를 받고 불타는 상태가 됨. 젖어 있었으면 증기 폭발 (젖음만 풀리고 불은 붙지 않음)
+        self.hp = max(0, self.hp - damage)
+        if self.is_wet() and not self.is_dead():
+            self.wet_time = 0.0
+            self.steam_explode(dir_x, dir_y)
+            return
+        self.knock_back(dir_x, dir_y)
         if not self.is_dead():
             self.ignite()
 
     def on_water_hit(self, dir_x, dir_y, damage):
-        # 물 공격: 파이어볼처럼 밀려나며 피해를 받지만, 불이 붙지 않고 불타던 중이면 불이 꺼짐. 젖어서 느려짐
+        # 물 공격: 밀려나며 피해를 받고 젖어서 느려짐. 불타고 있었으면 증기 폭발 (불만 꺼지고 젖지는 않음)
         self.hp = max(0, self.hp - damage)
-        self.knockback_dir = (dir_x, dir_y)
-        self.knockback_time = KNOCKBACK_TIME
+        if self.is_burning() and not self.is_dead():
+            self.extinguish()
+            self.steam_explode(dir_x, dir_y)
+            return
+        self.knock_back(dir_x, dir_y)
         self.extinguish()
         if not self.is_dead():
             self.wet_time = WET_TIME
@@ -196,7 +215,7 @@ class Rat:
 
     def update_knockback(self, frame_time, obstacles):
         # 남은 시간에 비례해 속도가 줄어듦. 벽에 막힌 축은 더 밀리지 않음
-        speed = KNOCKBACK_SPEED * self.knockback_time / KNOCKBACK_TIME
+        speed = self.knockback_speed * self.knockback_time / self.knockback_duration
         dx, dy = self.knockback_dir
         old_x = self.x
         self.x += dx * speed * frame_time
