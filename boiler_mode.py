@@ -11,6 +11,8 @@ from flame import Flame
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 from rat import spawn_rats
+from sliding_door import SlidingDoor
+from water_tank import WaterTank
 
 # 보일러실(boiler_bg.png): 워든을 처치한 뒤 워든 맵의 보일러실 문으로 들어오면 나오는 단계
 BOILER_IMAGE = 'sprite_sheet/sprite_sheet_bg/boiler_bg.png'
@@ -22,9 +24,7 @@ BOILER_OBSTACLES = [
     (0, 0, 64, 768, WALL),       # 왼쪽
     (960, 0, 1024, 768, WALL),   # 오른쪽
     # 물체
-    (72, 135, 184, 188, OBJECT),   # 왼쪽 물탱크
     (265, 135, 568, 185, OBJECT),  # 보일러
-    (650, 135, 760, 188, OBJECT),  # 오른쪽 물탱크
     # 가운데를 가로지르는 방벽: 부서진 두 군데(x 192~320, 702~832)로만 지나갈 수 있음
     (64, 396, 192, 448, WALL),
     (320, 396, 702, 448, WALL),
@@ -51,6 +51,15 @@ FLAME_DAMAGE = 10
 BAT_COUNT = 3
 BAT_AREAS = [(90, 200, 940, 680)]      # 처음 놓이는 범위 (boiler_bg.png 기준 (left, top, right, bottom))
 BAT_BOUNDS = (70, 150, 954, 694)       # 날아다닐 수 있는 범위 (그림자 가운데 기준)
+# 위쪽의 두 물통: 물 공격을 맞힐 때마다 물이 조금씩 차오르고, 둘 다 차면 수로 문이 열림
+# (받침대, 물이 차오르는 유리관 안쪽, 다 차면 초록으로 바뀌는 받침대의 두 불빛), 모두 (left, top, right, bottom)
+WATER_TANKS = [
+    ((72, 135, 184, 188), (80, 38, 176, 126), [(84, 164, 90, 170), (166, 164, 172, 170)]),     # 왼쪽
+    ((650, 135, 760, 188), (656, 38, 752, 126), [(660, 164, 666, 170), (742, 164, 748, 170)]),  # 오른쪽
+]
+# 오른쪽 위 수로 문: 배경에 그려진 두 짝 미닫이 문과 가운데 갈라지는 x
+CANAL_DOOR_BOX = (824, 76, 904, 128)
+CANAL_DOOR_SEAM_X = 864
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -67,9 +76,9 @@ def carry_over(kai):
 
 
 def update_obstacles():
-    # 불길은 꺼지면 지나갈 수 있으므로 배경과 불길의 장애물을 매 프레임 합침
-    flame_obstacles = [flame.get_obstacle() for flame in flames]
-    game_world.obstacles = background.get_obstacles() + [o for o in flame_obstacles if o]
+    # 불길은 꺼지면 지나갈 수 있으므로 배경, 물통, 불길의 장애물을 매 프레임 합침
+    object_obstacles = [o.get_obstacle() for o in tanks + flames]
+    game_world.obstacles = background.get_obstacles() + [o for o in object_obstacles if o]
 
 
 def to_canvas_box(box):
@@ -103,10 +112,12 @@ def obstacle_bbs():
 
 
 def init():
-    global background, flames, rats, bats, kai, hud
+    global background, flames, tanks, canal_door, rats, bats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, BOILER_IMAGE, None, BOILER_OBSTACLES)
     flames = [Flame(background, box) for box in FLAME_BOXES]
+    tanks = [WaterTank(background, *tank) for tank in WATER_TANKS]
+    canal_door = SlidingDoor(background, CANAL_DOOR_BOX, CANAL_DOOR_SEAM_X)
     update_obstacles()
     rats = spawn_rats(RAT_COUNT, [to_canvas_box(area) for area in RAT_AREAS], obstacle_bbs())
     start = (background.to_canvas_x(KAI_START_IMAGE_POS[0]), background.to_canvas_y(KAI_START_IMAGE_POS[1]))
@@ -147,6 +158,12 @@ def update(frame_time):
     for flame in flames:
         flame.update(frame_time)
     flames[:] = [flame for flame in flames if flame.alive]  # 다 꺼진 불길은 지움
+    for tank in tanks:
+        tank.update(frame_time)
+    # 두 물통에 물이 다 차면 수로 문이 열림
+    if all(tank.is_full() for tank in tanks):
+        canal_door.open()
+    canal_door.update(frame_time)
     update_obstacles()
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     # (날고 있는 박쥐는 벽 위에 있어도 되므로 바닥에 떨어진 박쥐만)
@@ -183,6 +200,9 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    canal_door.draw()       # 열리는 수로 문과
+    for tank in tanks:
+        tank.draw()         # 물통에 차오르는 물 (둘 다 배경 그림의 일부라서 배경 바로 위에 그림)
     # 발(불길은 아래쪽 끝)이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     # 날고 있는 박쥐는 공중에 있으므로 모든 것 위에 그림
     grounded = [kai] + rats + flames + [bat for bat in bats if not bat.is_flying()]

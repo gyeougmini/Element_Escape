@@ -12,7 +12,7 @@ from collision import collide, collide_any
 BAT_IMAGE = 'sprite_sheet/sprite_sheet_bat/bat_animation_alpha.png'
 FRAME_SIZE = 128
 SHEET_HEIGHT = 1024
-BAT_SCALE = 0.5      # 그림 크기 배율: 아래의 그림자/몸통 박스, 흔들림 폭도 이 배율에 맞춰 줄어듦
+BAT_SCALE = 0.6      # 그림 크기 배율: 아래의 그림자/몸통 박스, 흔들림 폭도 이 배율에 맞춰 줄어듦
 GROUND_MARGIN = 12   # 프레임 아래쪽 끝에서 그림자(바닥에 닿는 점)까지의 거리
 FLY_COLS = (0, 1, 2, 3)
 BURN_COLS = (13, 14, 15, 16)
