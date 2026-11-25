@@ -220,3 +220,6 @@ def draw():
             draw_bb(enemy.get_bb())
             draw_bb(enemy.get_hit_bb())
             enemy.draw_chase_range()
+        for o in game_world.objects:
+            if hasattr(o, 'draw_range'):
+                o.draw_range()  # 증기가 시야를 가리는 범위

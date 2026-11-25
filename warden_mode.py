@@ -158,6 +158,9 @@ def draw():
         draw_bb(warden.get_bb())
         draw_bb(warden.get_hit_bb())
         warden.draw_dash_range()
+        for o in game_world.objects:
+            if hasattr(o, 'draw_range'):
+                o.draw_range()  # 증기가 시야를 가리는 범위
         if capsule.is_floating():
             draw_bb(capsule.get_bb())
         if boiler_door.is_open():

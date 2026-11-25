@@ -141,7 +141,7 @@ class Bat:
     def steam_explode(self, dir_x, dir_y):
         # 증기 폭발: 보통보다 멀리 밀려나고 폭발 연출이 나옴 (상태를 푸는 것은 부른 쪽에서)
         self.knock_back(dir_x, dir_y, steam.KNOCKBACK_SPEED, steam.KNOCKBACK_TIME)
-        steam.explode_at(self.get_hit_bb())
+        steam.explode_at(self, dir_x, dir_y)
 
     def on_fireball_hit(self, dir_x, dir_y, damage):
         # 불 공격: 밀려나며 피해를 받고 공중에서 불타는 상태가 됨
@@ -233,7 +233,8 @@ class Bat:
             self.move(dx * speed * frame_time, dy * speed * frame_time, obstacles)
             self.knockback_time -= frame_time
             return
-        if self.distance_to(target) <= CHASE_RANGE:
+        # 증기 안에 있으면 카이를 보지 못해 추적하지 못하고 돌아다니기만 함
+        if self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self):
             # 카이 쪽으로 곧장 다가감 (날 때는 벽 위로도)
             self.chasing = True
             tx, ty = bb_center(target.get_bb())

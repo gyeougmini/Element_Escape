@@ -114,7 +114,7 @@ class Rat:
     def steam_explode(self, dir_x, dir_y):
         # 증기 폭발: 보통보다 멀리 밀려나고 폭발 연출이 나옴 (상태를 푸는 것은 부른 쪽에서)
         self.knock_back(dir_x, dir_y, steam.KNOCKBACK_SPEED, steam.KNOCKBACK_TIME)
-        steam.explode_at(self.get_hit_bb())
+        steam.explode_at(self, dir_x, dir_y)
 
     def on_fireball_hit(self, dir_x, dir_y, damage):
         # 불 공격: 밀려나며 피해를 받고 불타는 상태가 됨. 젖어 있었으면 증기 폭발 (젖음만 풀리고 불은 붙지 않음)
@@ -267,7 +267,8 @@ class Rat:
             if self.death_time >= DEATH_TIME:
                 self.alive = False
             return
-        if target and self.distance_to(target) <= CHASE_RANGE:
+        # 증기 안에 있으면 카이를 보지 못해 추적하지 못하고 돌아다니기만 함
+        if target and self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self):
             self.chasing = True
             self.chase(target, frame_time, obstacles)
             return

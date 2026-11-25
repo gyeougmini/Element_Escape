@@ -149,7 +149,7 @@ class Warden:
             self.knockback_dir = (dir_x, dir_y)
             self.knockback_time = steam.KNOCKBACK_TIME
             self.attack_time = None
-            steam.explode_at(self.get_hit_bb())
+            steam.explode_at(self, dir_x, dir_y)
 
     def is_knocked_back(self):
         return self.knockback_time > 0
@@ -258,6 +258,10 @@ class Warden:
             return
         if self.is_attacking():
             self.update_attack(frame_time, target)
+            return
+        if steam.in_steam(self):
+            # 증기 안에서는 카이를 보지 못해 추적하지도, 공격을 시작하지도 못하고 제자리에 멈춤
+            self.dashing = False
             return
         distance = self.distance_to(target)
         self.dashing = distance <= DASH_RANGE
