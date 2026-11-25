@@ -7,7 +7,7 @@ from collision import collide, collide_any
 
 # rat_animation.png: 30열 x 8행(1920x512), 프레임 64x64
 # 행(방향)은 카이 시트와 같은 순서, 0~6열 걷기 / 7~8열 물기 / 9열 맞음 / 10~11열 기절
-# 12~17열 불 / 18~23열 물 / 24~29열 전기 속성을 띤 걷기 (물/전기는 아직 사용하지 않음)
+# 12~17열 불 / 18~23열 물 / 24~29열 전기 속성을 띤 걷기 (전기는 아직 사용하지 않음)
 FRAME_SIZE = 64
 SHEET_HEIGHT = 512
 WALK_FRAMES = 7
@@ -40,6 +40,13 @@ BURN_TIME = 3.0
 BURN_DAMAGE = 5
 BURN_FIRST_COL = 12  # 불 걷기 프레임 12~17열
 BURN_WALK_FRAMES = 6
+
+# 물 공격에 맞으면 '젖음' 상태: WET_TIME 동안 이동 속도가 WET_SPEED_RATE배로 느려지고 파란(물) 프레임으로 그림
+# 젖은 중에 또 맞으면 처음부터 다시 셈. 불이 붙으면 말라서 젖음 상태가 끝남
+WET_TIME = 4.0
+WET_SPEED_RATE = 0.5
+WET_FIRST_COL = 18  # 물 걷기 프레임 18~23열
+WET_WALK_FRAMES = 6
 
 IDLE_TIME = (0.5, 2.0)  # 멈춰 있는 시간 범위(초)
 WALK_TIME = (1.0, 3.0)  # 한 방향으로 걷는 시간 범위(초)
@@ -81,6 +88,7 @@ class Rat:
         self.chasing = False
         self.burn_time = 0.0  # 불타는 상태가 남은 시간(초), 0이면 불타지 않음
         self.burn_damage_left = 0.0  # 이번 불타는 상태에서 아직 받지 않은 지속 피해
+        self.wet_time = 0.0  # 젖음 상태가 남은 시간(초), 0이면 젖지 않음
         self.start_idle()
 
     def foot_y(self):
@@ -104,11 +112,13 @@ class Rat:
             self.ignite()
 
     def on_water_hit(self, dir_x, dir_y, damage):
-        # 물 공격: 파이어볼처럼 밀려나며 피해를 받지만, 불이 붙지 않고 불타던 중이면 불이 꺼짐
+        # 물 공격: 파이어볼처럼 밀려나며 피해를 받지만, 불이 붙지 않고 불타던 중이면 불이 꺼짐. 젖어서 느려짐
         self.hp = max(0, self.hp - damage)
         self.knockback_dir = (dir_x, dir_y)
         self.knockback_time = KNOCKBACK_TIME
         self.extinguish()
+        if not self.is_dead():
+            self.wet_time = WET_TIME
 
     def extinguish(self):
         # 불타는 상태를 끝냄: 남은 지속 피해는 받지 않음
@@ -119,6 +129,14 @@ class Rat:
         """'불타는' 상태로 만듦. 이미 불타는 중이어도 이전 지속 피해는 버리고 3초를 처음부터 다시 셈"""
         self.burn_time = BURN_TIME
         self.burn_damage_left = BURN_DAMAGE
+        self.wet_time = 0.0  # 불이 붙으면 말라 버림
+
+    def is_wet(self):
+        return self.wet_time > 0
+
+    def speed_rate(self):
+        # 젖어 있으면 느려짐
+        return WET_SPEED_RATE if self.is_wet() else 1.0
 
     def place_feet_at(self, x, y):
         # 발 충돌 박스의 중심이 (x, y)에 오도록 위치를 맞춤
@@ -209,17 +227,19 @@ class Rat:
             return  # 이미 붙어 있으면 제자리에서 바라보기만 함
         length = math.hypot(dx, dy)
         old_x = self.x
-        self.x += dx / length * CHASE_SPEED * frame_time
+        speed = CHASE_SPEED * self.speed_rate()
+        self.x += dx / length * speed * frame_time
         if collide_any(self.get_bb(), obstacles):
             self.x = old_x
         old_y = self.y
-        self.y += dy / length * CHASE_SPEED * frame_time
+        self.y += dy / length * speed * frame_time
         if collide_any(self.get_bb(), obstacles):
             self.y = old_y
 
     def update(self, frame_time, obstacles, target=None):
         self.anim_time += frame_time
         self.update_burn(frame_time)
+        self.wet_time = max(0.0, self.wet_time - frame_time)
         if self.is_knocked_back():
             self.update_knockback(frame_time, obstacles)
             return
@@ -246,8 +266,9 @@ class Rat:
             return
         length = math.hypot(self.dir_x, self.dir_y)
         old_x, old_y = self.x, self.y
-        self.x += self.dir_x / length * RAT_SPEED * frame_time
-        self.y += self.dir_y / length * RAT_SPEED * frame_time
+        speed = RAT_SPEED * self.speed_rate()
+        self.x += self.dir_x / length * speed * frame_time
+        self.y += self.dir_y / length * speed * frame_time
         if collide_any(self.get_bb(), obstacles):
             # 벽이나 물체에 부딪히면 제자리로 돌아가 다른 방향으로 걸음
             self.x, self.y = old_x, old_y
@@ -263,6 +284,11 @@ class Rat:
             col = BURN_FIRST_COL
             if self.is_moving():
                 col += int(self.anim_time * WALK_FPS) % BURN_WALK_FRAMES
+        elif self.is_wet():
+            # 젖어 있는 동안은 파란 물 프레임: 느려진 만큼 천천히 걷고, 멈춰 있으면 첫 프레임
+            col = WET_FIRST_COL
+            if self.is_moving():
+                col += int(self.anim_time * WALK_FPS * WET_SPEED_RATE) % WET_WALK_FRAMES
         elif self.is_moving():
             col = int(self.anim_time * WALK_FPS) % WALK_FRAMES
         else:

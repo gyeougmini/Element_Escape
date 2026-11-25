@@ -1,3 +1,5 @@
+import math
+
 from pico2d import *
 
 import game_framework
@@ -40,8 +42,10 @@ RAT_AREAS = [  # boiler_bg.png 기준 (left, top, right, bottom)
     (70, 200, 955, 390),   # 방벽 위쪽 (보일러 앞)
     (70, 455, 700, 690),   # 방벽 아래쪽 왼편
 ]
-# 불길에서 이 거리(px) 안으로 쥐의 발이 들어오면 쥐에게 불이 옮겨붙음
+# 불길에서 이 거리(px) 안으로 쥐의 발이 들어오면 불길에 덴 것으로 봄:
+# 파이어볼에 맞은 것처럼 FLAME_DAMAGE만큼 피해를 받고 불길 반대쪽으로 밀려나며 불이 붙음
 FLAME_RANGE = 16
+FLAME_DAMAGE = 10
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -66,10 +70,24 @@ def to_canvas_box(box):
             background.to_canvas_x(right), background.to_canvas_y(top))
 
 
-def near_flame(rat):
+def touching_flame(rat):
+    """쥐의 발 가까이에 있는 타는 불길, 없으면 None"""
     left, bottom, right, top = rat.get_bb()
     reach = (left - FLAME_RANGE, bottom - FLAME_RANGE, right + FLAME_RANGE, top + FLAME_RANGE)
-    return any(flame.is_burning() and collide(reach, flame.get_bb()) for flame in flames)
+    for flame in flames:
+        if flame.is_burning() and collide(reach, flame.get_bb()):
+            return flame
+    return None
+
+
+def burn_by_flame(rat, flame):
+    # 불길 가운데에서 쥐 쪽으로 밀어냄 (파이어볼에 맞은 것과 같은 반응: 피해, 밀려남, 불붙음)
+    fl, fb, fr, ft = flame.get_bb()
+    rl, rb, rr, rt = rat.get_bb()
+    dx, dy = (rl + rr) / 2 - (fl + fr) / 2, (rb + rt) / 2 - (fb + ft) / 2
+    length = math.hypot(dx, dy)
+    dir_x, dir_y = (dx / length, dy / length) if length else (0, -1)
+    rat.on_fireball_hit(dir_x, dir_y, FLAME_DAMAGE)
 
 
 def obstacle_bbs():
@@ -128,9 +146,11 @@ def update(frame_time):
     for rat in rats:
         rat.update(frame_time, obstacle_bbs(), kai)
         rat.touch(kai)
-        # 불길 근처로 다가간 쥐는 불타는 상태가 됨
-        if not rat.is_dead() and not rat.is_burning() and near_flame(rat):
-            rat.ignite()
+        # 불길에 닿은 쥐는 데어서 피해를 받고 밀려나며 불이 붙음 (밀려나는 동안은 다시 데지 않음)
+        if not rat.is_dead() and not rat.is_knocked_back():
+            flame = touching_flame(rat)
+            if flame:
+                burn_by_flame(rat, flame)
     # 기절 연출이 끝난 쥐는 지우고, HP가 남은 쥐만 공격에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
     game_world.hittables = [rat for rat in rats if not rat.is_dead()]
