@@ -19,7 +19,8 @@ FLY_COLS = (0, 1, 2, 3)
 BURN_COLS = (13, 14, 15, 16)
 WET_COLS = (9, 10, 11, 12)
 HIT_COL = 8
-FALLEN_COL = 9       # 쓰러졌을 때 (바닥에 떨어진 모습)
+FALLEN_COL = 9       # 물 공격으로 쓰러졌을 때 (젖어서 바닥에 떨어진 모습)
+# 불(파이어볼, 지속 피해, 보일러실 불)로 쓰러졌을 때는 불타는 모습(BURN_COLS) 그대로 흐려지며 사라짐
 FLY_FPS = 10
 WET_FPS = 5
 BOB_AMPLITUDE = 3 * BAT_SCALE  # 날 때 몸이 위아래로 흔들리는 폭(px)
@@ -49,7 +50,7 @@ KNOCKBACK_TIME = 0.25
 # 불 공격에 맞으면 공중에서 '불타는' 상태: 쥐와 같은 방법으로 BURN_TIME 동안 합쳐서 BURN_DAMAGE만큼 지속 피해
 BURN_TIME = 3.0
 BURN_DAMAGE = 5
-# HP가 0이 되면 바닥에 떨어진 모습으로 흐려지며 사라짐
+# HP가 0이 되면 흐려지며 사라짐 (물로 죽으면 바닥에 떨어진 모습, 불로 죽으면 불타는 모습)
 DEATH_TIME = 1.0
 
 # (dir_x, dir_y) -> 시트의 행 번호 (위에서부터), 카이와 같음
@@ -87,6 +88,7 @@ class Bat:
         self.burn_damage_left = 0.0
         self.wet_time = 0.0
         self.death_time = 0.0
+        self.killed_by_water = False  # 물 공격으로 죽었는지: 죽는 모습을 고르는 데 사용
         self.alive = True  # False가 되면 목록에서 지움
         self.chasing = False
         self.start_wander()
@@ -125,11 +127,14 @@ class Bat:
         return math.hypot(tx - self.x, ty - self.y)
 
     # ---- 공격에 맞음 ----
-    def take_damage(self, damage):
+    def take_damage(self, damage, by_water=False):
+        was_alive = not self.is_dead()
         self.hp = max(0, self.hp - damage)
         if self.hp < 1e-6:
             self.hp = 0
         if self.is_dead():
+            if was_alive:
+                self.killed_by_water = by_water
             self.burn_time = 0.0
             self.wet_time = 0.0
 
@@ -158,7 +163,7 @@ class Bat:
     def on_water_hit(self, dir_x, dir_y, damage):
         # 물 공격: 밀려나며 피해를 받고, 젖어서 바닥으로 떨어짐
         # 불타고 있었으면 증기 폭발: 불만 꺼지고 젖지 않으므로 계속 날아다님
-        self.take_damage(damage)
+        self.take_damage(damage, by_water=True)
         if self.is_burning() and not self.is_dead():
             self.burn_time = 0.0
             self.burn_damage_left = 0.0
@@ -270,7 +275,10 @@ class Bat:
         size = FRAME_SIZE * BAT_SCALE
         center_y = self.y + (FRAME_SIZE / 2 - GROUND_MARGIN) * BAT_SCALE
         if self.is_dead():
-            col = FALLEN_COL
+            if self.killed_by_water:
+                col = FALLEN_COL
+            else:
+                col = BURN_COLS[int(self.anim_time * FLY_FPS) % len(BURN_COLS)]
             Bat.image.opacify(max(0.0, 1 - self.death_time / DEATH_TIME))
         elif self.is_knocked_back():
             col = HIT_COL
