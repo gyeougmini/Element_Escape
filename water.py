@@ -32,9 +32,13 @@ class WaterBall(Fireball):
         target.on_water_hit(self.dir_x, self.dir_y, self.DAMAGE)
 
     def hit(self, burnable, on_hit):
-        # 물체에 맞으면 불 공격용 반응(on_hit: 불붙음, 녹음 등)은 부르지 않음
+        # 물체에 맞으면 불 공격용 반응(on_hit: 불붙음, 녹음 등)은 부르지 않음.
+        # 대신 그 물체가 물에 반응하면(on_water_hit이 있으면, 예: 타오르는 불길) 그것을 부름
         self.alive = False
         game_world.add(WaterSplash(self.x, self.y))
+        owner = getattr(on_hit, '__self__', None)  # on_hit은 물체의 메서드이므로 그 물체를 찾음
+        if owner is not None and hasattr(owner, 'on_water_hit'):
+            owner.on_water_hit(self.DAMAGE)
 
 
 class WaterSplash:
