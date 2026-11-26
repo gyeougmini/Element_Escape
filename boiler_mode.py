@@ -4,6 +4,7 @@ from pico2d import *
 
 import game_framework
 import game_world
+import waterway_mode
 from background import Background, WALL, OBJECT
 from bat import spawn_bats
 from collision import collide, draw_bb, push_out_offset
@@ -60,6 +61,9 @@ WATER_TANKS = [
 # 오른쪽 위 수로 문: 배경에 그려진 두 짝 미닫이 문과 가운데 갈라지는 x
 CANAL_DOOR_BOX = (824, 76, 904, 128)
 CANAL_DOOR_SEAM_X = 864
+# 수로 문 바로 앞: 문이 다 열린 뒤 카이의 발이 여기에 닿으면(문 쪽 벽에 붙으면) 수로로 넘어감
+# 위쪽 끝(135)이 위쪽 벽의 아래쪽 끝
+CANAL_ENTRY_BOX = (830, 135, 898, 145)
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -112,12 +116,14 @@ def obstacle_bbs():
 
 
 def init():
-    global background, flames, tanks, canal_door, rats, bats, kai, hud
+    global background, flames, tanks, canal_door, canal_entry_bb, leaving, rats, bats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, BOILER_IMAGE, None, BOILER_OBSTACLES)
     flames = [Flame(background, box) for box in FLAME_BOXES]
     tanks = [WaterTank(background, *tank) for tank in WATER_TANKS]
     canal_door = SlidingDoor(background, CANAL_DOOR_BOX, CANAL_DOOR_SEAM_X)
+    canal_entry_bb = to_canvas_box(CANAL_ENTRY_BOX)
+    leaving = False  # 수로로 넘어가는 중 (페이드 아웃 동안 다시 부르지 않도록)
     update_obstacles()
     rats = spawn_rats(RAT_COUNT, [to_canvas_box(area) for area in RAT_AREAS], obstacle_bbs())
     start = (background.to_canvas_x(KAI_START_IMAGE_POS[0]), background.to_canvas_y(KAI_START_IMAGE_POS[1]))
@@ -137,6 +143,14 @@ def init():
 def finish():
     game_world.objects.clear()
     game_world.hittables = []
+
+
+def enter_waterway():
+    global leaving
+    leaving = True
+    kai.stop()
+    waterway_mode.carry_over(kai)  # HP, 에너지, 물의 초능력을 다음 단계로 넘김
+    game_framework.fade_to(waterway_mode)
 
 
 def handle_events():
@@ -164,6 +178,8 @@ def update(frame_time):
     if all(tank.is_full() for tank in tanks):
         canal_door.open()
     canal_door.update(frame_time)
+    if canal_door.is_open() and not leaving and collide(kai.get_bb(), canal_entry_bb):
+        enter_waterway()
     update_obstacles()
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     # (날고 있는 박쥐는 벽 위에 있어도 되므로 바닥에 떨어진 박쥐만)
@@ -216,6 +232,7 @@ def draw():
         for bb in obstacle_bbs():
             draw_bb(bb)
         draw_bb(kai.get_bb())
+        draw_bb(canal_entry_bb)
         for enemy in rats + bats:
             draw_bb(enemy.get_bb())
             draw_bb(enemy.get_hit_bb())

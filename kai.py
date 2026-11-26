@@ -25,6 +25,10 @@ FOOT_HEIGHT = 12
 ATTACK_COLS = (6, 7)
 ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
 ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초)
+# 6~7열은 손에 불꽃이 그려져 있으므로, 물만 준비해서 쏠 때는 대신 kai_idle.png의 이 열(불꽃 없는 모습)을 쓰고
+# 손의 물방울이 발사 순간까지 커지다가 발사되면 사라지게 함
+WATER_ATTACK_IDLE_COL = 0
+WATER_CHARGE_SCALE = 1.6  # 발사 직전 손의 물방울 크기 배율
 FIRE_HEIGHT = 36          # 발에서 손까지의 높이: 파이어볼이 손 높이에서 나감
 FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
 READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 손에 띄움
@@ -237,8 +241,14 @@ class Kai:
                 self.row = DIRECTION_ROWS[(self.dir_x, self.dir_y)]
             self.move(self.dir_x * KAI_SPEED * frame_time, self.dir_y * KAI_SPEED * frame_time, obstacles)
 
+    def is_water_only_attack(self):
+        # 물만 준비된 상태로 공격 중인지 (불꽃이 그려진 공격 프레임을 쓰지 않음)
+        return self.state == 'fire_attack' and self.water_ready and not self.fire_ready
+
     def draw(self):
-        if self.state == 'fire_attack':
+        if self.is_water_only_attack():
+            image, col = self.idle_image, WATER_ATTACK_IDLE_COL
+        elif self.state == 'fire_attack':
             attack_frame = min(int(self.attack_time / ATTACK_FRAME_TIME), len(ATTACK_COLS) - 1)
             image, col = self.walk_image, ATTACK_COLS[attack_frame]
         elif self.state == 'walk':
@@ -265,11 +275,15 @@ class Kai:
         length = math.hypot(dir_x, dir_y)
         x = self.x + dir_x / length * READY_GLOW_DISTANCE
         y = self.hand_y() + dir_y / length * READY_GLOW_DISTANCE
-        if self.water_ready:
+        if self.water_ready and not (self.is_water_only_attack() and self.fired):
             # water.png 행은 오른쪽부터 반시계 방향: 바라보는 방향의 물방울(꼬리가 몸 쪽)을 씀
             water_row = round(math.degrees(math.atan2(dir_y, dir_x)) / 45) % 8
             col = int(self.anim_time * 12) % 4
             size = READY_GLOW_SIZE * WATER_GLOW_SCALE
+            if self.is_water_only_attack():
+                # 발사 순간까지 물방울이 점점 커짐
+                charge = min(1.0, self.attack_time / ATTACK_FRAME_TIME)
+                size *= 1 + (WATER_CHARGE_SCALE - 1) * charge
             self.water_ready_image.clip_draw(col * READY_GLOW_SIZE, WATER_SHEET_HEIGHT - (water_row + 1) * READY_GLOW_SIZE,
                                              READY_GLOW_SIZE, READY_GLOW_SIZE, x, y, size, size)
         if self.fire_ready:
