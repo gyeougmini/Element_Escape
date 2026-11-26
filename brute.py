@@ -77,7 +77,7 @@ def bb_center(bb):
 class Brute:
     image = None
 
-    def __init__(self, x, y, left_x, right_x, start_dir=1, route=None):
+    def __init__(self, x, y, left_x, right_x, start_dir=1, route=None, sight=None):
         # (x, y): 발 가운데. left_x ~ right_x 사이의 이 줄(y)을 좌우로 순찰함
         # route(x, y, tx, ty): 발 가운데 (x, y)에서 (tx, ty)로 가려면 먼저 향할 곳 (x, y), 갈 수 없으면 None
         #   (예: 물길 건너편은 다리로 돌아가야 하고, 다리가 없으면 갈 수 없음). 없으면 곧장 향함
@@ -87,6 +87,8 @@ class Brute:
         self.patrol_y = y
         self.left_x, self.right_x = left_x, right_x
         self.route = route or (lambda x, y, tx, ty: (tx, ty))
+        # sight(x, y, tx, ty): 벽에 가리지 않고 볼 수 있는지 (예: 높은 벽돌 벽 너머는 보이지 않음). 없으면 언제나 보임
+        self.sight = sight or (lambda x, y, tx, ty: True)
         self.patrol_dir = start_dir
         self.row = DIRECTION_ROWS[(start_dir, 0)]
         self.state = 'patrol'  # patrol, roar, chase, attack, confused, return
@@ -146,7 +148,8 @@ class Brute:
             return False
         x, y = bb_center(self.get_bb())
         tx, ty = bb_center(target.get_bb())
-        return not steam.blocks_sight(x, y, tx, ty) and self.route(x, y, tx, ty) is not None
+        return (not steam.blocks_sight(x, y, tx, ty) and self.sight(x, y, tx, ty)
+                and self.route(x, y, tx, ty) is not None)
 
     def go_to(self, tx, ty, speed, frame_time, obstacles):
         """발 가운데를 (tx, ty)로 길을 따라 옮김. 다 왔으면 True, 갈 수 없으면 None"""
