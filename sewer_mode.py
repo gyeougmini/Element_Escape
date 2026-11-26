@@ -2,6 +2,7 @@ from pico2d import *
 
 import game_framework
 import game_world
+import kingrat_mode
 from background import Background, WALL, OBJECT
 from brute import Brute
 from drone import Drone
@@ -54,6 +55,8 @@ POTIONS = [('hp', 84, 690), ('ep', 930, 482)]
 RESERVOIR_DOOR_BOX = (824, 77, 904, 128)
 RESERVOIR_DOOR_SEAM_X = 864
 RESERVOIR_FRONT_BOX = (800, 135, 930, 235)  # 문 앞 (sewer_bg.png 기준 (left, top, right, bottom))
+# 저수조 문 바로 앞: 문이 다 열린 뒤 카이의 발이 여기에 닿으면(문 쪽 벽에 붙으면) 킹랫 방(저수조)으로 넘어감
+RESERVOIR_ENTRY_BOX = (830, 135, 898, 145)
 CHASED_NOTICE_TEXT = '적에게 쫓기는 중에는\n문이 열리지 않는다!'
 CHASED_NOTICE_HOLD = 1.5
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
@@ -161,12 +164,14 @@ def obstacle_bbs():
 
 def init():
     global background, brutes, drones, potions, kai, hud
-    global reservoir_door, reservoir_front_bb, was_in_front, notice
+    global reservoir_door, reservoir_front_bb, reservoir_entry_bb, was_in_front, notice, leaving
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, SEWER_IMAGE, None, SEWER_OBSTACLES)
     game_world.obstacles = background.get_obstacles()
     reservoir_door = SlidingDoor(background, RESERVOIR_DOOR_BOX, RESERVOIR_DOOR_SEAM_X)
     reservoir_front_bb = to_canvas_box(RESERVOIR_FRONT_BOX)
+    reservoir_entry_bb = to_canvas_box(RESERVOIR_ENTRY_BOX)
+    leaving = False  # 킹랫 방으로 넘어가는 중 (페이드 아웃 동안 다시 부르지 않도록)
     was_in_front = False
     notice = None  # 쫓기는 중에 문 앞에 오면 나오는 안내
     brutes = [Brute(background.to_canvas_x(x), background.to_canvas_y(y),
@@ -207,6 +212,14 @@ def handle_events():
             kai.handle_event(event)
 
 
+def enter_kingrat_room():
+    global leaving
+    leaving = True
+    kai.stop()
+    kingrat_mode.carry_over(kai)  # HP, 에너지, 물의 초능력을 다음 단계로 넘김
+    game_framework.fade_to(kingrat_mode)
+
+
 def update(frame_time):
     global notice
     offset = push_out_offset(kai.get_bb(), obstacle_bbs())
@@ -224,6 +237,8 @@ def update(frame_time):
     potions[:] = [potion for potion in potions if potion.alive]
     update_reservoir_door()
     reservoir_door.update(frame_time)
+    if reservoir_door.is_open() and not leaving and collide(kai.get_bb(), reservoir_entry_bb):
+        enter_kingrat_room()
     if notice:
         notice.update(frame_time)
         if notice.is_done():
@@ -252,6 +267,7 @@ def draw():
             draw_bb(bb)
         draw_bb(kai.get_bb())
         draw_bb(reservoir_front_bb)
+        draw_bb(reservoir_entry_bb)
         for enemy in brutes + drones:
             draw_bb(enemy.get_bb())
             draw_bb(enemy.get_hit_bb())
