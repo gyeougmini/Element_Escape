@@ -9,7 +9,8 @@ from collision import collide, collide_any
 
 # 킹 랫: 스테이지 2 보스, 하수 변이체의 우두머리 (HP 600, 크기 128x128, 약점: 증기 폭발 피해 2배)
 #   패턴 A: 독 침을 3방향으로 발사 (한 발에 피해 10)
-#   패턴 B: 물속으로 잠수 (3초 동안 무적) 후 카이 근처에서 튀어나옴 (피해 25). 튀어나온 뒤 1.5초 동안 '젖음' 상태
+#   패턴 B: 가운데 저수조로 달려가 뛰어들어 잠수 (3초 동안 무적). 물속에서 카이 쪽 가장자리로 헤엄쳐 간 뒤
+#           카이를 향해 뛰어올라 덮침 (착지 자리 근처면 피해 25). 착지한 뒤 1.5초 동안 '젖음' 상태
 #   패턴 C: HP 50% 이하가 되면 방 가장자리에 화재 타일 4개 생성 (kingrat_mode에서 처리)
 #   공략: 튀어나온 뒤 젖어 있을 때 불을 맞혀 증기 폭발을 일으킴. 화재 타일은 물로 꺼서 공간을 확보
 #
@@ -59,18 +60,25 @@ NEEDLE_LENGTH = 20
 NEEDLE_HEIGHT = 44      # 독 침이 날아가는 높이 (바닥에서 입까지)
 NEEDLE_COLORS = [(60, 120, 30), (140, 230, 60), (220, 255, 160)]  # 바깥부터 안쪽 색
 
-# 패턴 B: 잠수 -> 물속에서 카이 쪽으로 이동 -> 카이 근처 자리를 정해 떠오름 -> 튀어나옴. 잠수부터 떠오름까지 무적
-DIVE_TIME = 0.4
-UNDER_TIME = 2.0
-RISE_TIME = 0.6         # 튀어나올 자리에 물결이 이는 시간 (피할 수 있는 예고)
-UNDER_SPEED = 190
-BURST_TIME = 0.25
+# 패턴 B: 저수조 가장자리로 달려감 -> 물속으로 뛰어듦 -> 물속(물결)에서 카이와 가까운 쪽으로 헤엄침
+#         -> 물 위로 떠오름 -> 카이가 있던 자리로 뛰어올라 덮침. 뛰어들 때부터 떠오를 때까지(3초) 무적, 공중에서도 맞지 않음
+RUN_SPEED = 130         # 저수조로 달려갈 때
+RUN_TIMEOUT = 2.5       # 이 시간 안에 가장자리에 닿지 못하면(막혀 있으면) 그 자리에서 뛰어듦
+DIVE_TIME = 0.4         # 물속으로 뛰어드는 시간 (포물선)
+DIVE_HEIGHT = 40
+DIVE_INSET = 50         # 가장자리에서 물 안쪽으로 이만큼 들어간 곳에 빠짐 (px)
+UNDER_TIME = 2.0        # 물속에서 헤엄치는 시간
+UNDER_SPEED = 260       # 저수조 반대편에서도 2초 안에 카이 쪽 물가에 닿을 만큼
+WATER_MARGIN = 34       # 물결이 물 가장자리에서 이만큼 안쪽에서만 움직임 (px)
+RISE_TIME = 0.6         # 물 위로 떠오르는 시간 (뛰어오를 예고)
+LEAP_TIME = 0.65        # 카이 쪽으로 뛰어올라 착지하기까지의 시간
+LEAP_HEIGHT = 90        # 뛰어오르는 높이 (px)
+LEAP_RANGE = 360        # 이보다 먼 곳은 이 거리까지만 뜀
 SHAKE_TIME = 0.25
 LAND_TIME = 0.2
-BURST_RADIUS = 80       # 튀어나올 때 이 거리 안에 카이의 발이 있으면 피해
+BURST_RADIUS = 80       # 착지할 때 이 거리 안에 카이의 발이 있으면 피해
 BURST_DAMAGE = 25
-EMERGE_OFFSET = 50      # 카이 자리에서 이만큼 떨어진 곳 중 비어 있는 곳으로 떠오름
-WET_TIME = 1.5          # 튀어나온 뒤 젖어 있는 시간
+WET_TIME = 1.5          # 착지한 뒤 젖어 있는 시간
 
 # 불 공격: 불타는 상태로 BURN_TIME 동안 합쳐서 BURN_DAMAGE만큼 지속 피해
 BURN_TIME = 3.0
@@ -86,7 +94,8 @@ DIRECTION_ROWS = {
     (0, 1): 4, (-1, 1): 5, (-1, 0): 6, (-1, -1): 7,
 }
 OCTANT_DIRECTIONS = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
-INVULNERABLE_STATES = ('dive', 'under', 'rise')
+INVULNERABLE_STATES = ('dive', 'under', 'rise', 'leap')
+IN_WATER_STATES = ('dive', 'under', 'rise', 'leap')  # 벽과 저수조를 무시하고 움직이는 동안
 
 
 def bb_center(bb):
@@ -134,12 +143,16 @@ class PoisonNeedle:
 class KingRat:
     image = None
 
-    def __init__(self, x, y, room_bounds):
+    def __init__(self, x, y, room_bounds, pool_box):
         # (x, y): 발 가운데. room_bounds: 방 안쪽 (left, bottom, right, top), 독 침이 날아갈 수 있는 범위
+        # pool_box: 저수조 물 부분 (left, bottom, right, top), 잠수 패턴에서 뛰어드는 곳
         if KingRat.image is None:
             KingRat.image = load_image(KINGRAT_IMAGE)
         self.x, self.y = x, y
         self.room_bounds = room_bounds
+        self.pool_box = pool_box
+        self.jump_from = self.jump_to = (x, y)  # 뛰어들기/뛰어오르기의 출발점과 도착점 (발 가운데)
+        self.height = 0.0                       # 공중에 떠 있는 높이 (그릴 때만 씀)
         self.hp = self.max_hp = KINGRAT_HP
         self.row = 0
         self.state = 'walk'
@@ -147,8 +160,6 @@ class KingRat:
         self.anim_time = 0.0
         self.next_pattern_time = random.uniform(*PATTERN_INTERVAL)
         self.last_patterns = []
-        self.emerge_point = (x, y)
-        self.burst_hit = False
         self.burn_time = 0.0
         self.burn_damage_left = 0.0
         self.wet_time = 0.0
@@ -168,6 +179,10 @@ class KingRat:
 
     def is_invulnerable(self):
         return self.state in INVULNERABLE_STATES
+
+    def ignores_obstacles(self):
+        # 물속이나 공중에 있는 동안은 벽과 저수조에 밀려나지 않음
+        return self.state in IN_WATER_STATES
 
     def is_burning(self):
         return self.burn_time > 0
@@ -327,7 +342,11 @@ class KingRat:
             pattern = 'B' if random.random() < chance_b else 'A'
         self.last_patterns = (self.last_patterns + [pattern])[-2:]
         self.next_pattern_time = random.uniform(*PATTERN_INTERVAL)
-        self.set_state('spit_ready' if pattern == 'A' else 'dive')
+        if pattern == 'A':
+            self.set_state('spit_ready')
+        else:
+            self.set_state('to_pool')
+            self.jump_from = self.pool_edge_point()
 
     # 패턴 A
     def update_spit_ready(self, frame_time, obstacles, target):
@@ -355,54 +374,118 @@ class KingRat:
             self.set_state('walk')
 
     # 패턴 B
+    def pool_edge_point(self):
+        """저수조 둘레에서 지금 자리와 가장 가까운 곳 바로 바깥 (발 가운데가 설 자리)"""
+        left, bottom, right, top = self.pool_box
+        # 저수조 바깥에서 어느 쪽에 있는지: 가장 멀리 벗어난 쪽의 변으로 감
+        outside = {'left': left - self.x, 'right': self.x - right,
+                   'bottom': bottom - (self.y + FOOT_HEIGHT), 'top': self.y - top}
+        side = max(outside, key=outside.get)
+        x = min(max(self.x, left + FOOT_HALF_WIDTH), right - FOOT_HALF_WIDTH)
+        y = min(max(self.y, bottom), top - FOOT_HEIGHT)
+        if side == 'left':
+            return left - FOOT_HALF_WIDTH - 4, y
+        if side == 'right':
+            return right + FOOT_HALF_WIDTH + 4, y
+        if side == 'bottom':
+            return x, bottom - FOOT_HEIGHT - 4
+        return x, top + 4
+
+    def water_point(self, x, y, margin=WATER_MARGIN):
+        """(x, y)를 저수조 물 안쪽(가장자리에서 margin 안)으로 맞춘 자리"""
+        left, bottom, right, top = self.pool_box
+        return (min(max(x, left + margin), right - margin),
+                min(max(y, bottom + margin), top - margin - FOOT_HEIGHT))
+
+    def update_to_pool(self, frame_time, obstacles, target):
+        # 저수조 가장자리로 달려감. 닿으면(또는 막혀서 시간이 지나면) 물속으로 뛰어듦
+        ex, ey = self.jump_from
+        dx, dy = ex - self.x, ey - self.y
+        length = math.hypot(dx, dy)
+        if length > 6 and self.state_time < RUN_TIMEOUT:
+            self.face(dx, dy)
+            step = min(length, RUN_SPEED * frame_time)
+            old_x, old_y = self.x, self.y
+            self.move(dx / length * step, dy / length * step, obstacles)
+            # 저수조 난간에 막혀 더 다가가지 못하면 그 자리가 가장자리이므로 바로 뛰어듦
+            if math.hypot(self.x - old_x, self.y - old_y) > step * 0.3:
+                return
+        self.jump_from = (self.x, self.y)
+        self.jump_to = self.water_point(self.x, self.y, DIVE_INSET)
+        self.face(self.jump_to[0] - self.x, self.jump_to[1] - self.y)
+        self.set_state('dive')
+
     def update_dive(self, frame_time, obstacles, target):
-        if self.state_time >= DIVE_TIME:
+        # 가장자리에서 물 안쪽으로 포물선을 그리며 뛰어듦
+        t = min(1.0, self.state_time / DIVE_TIME)
+        (x1, y1), (x2, y2) = self.jump_from, self.jump_to
+        self.x, self.y = x1 + (x2 - x1) * t, y1 + (y2 - y1) * t
+        self.height = math.sin(math.pi * t) * DIVE_HEIGHT
+        if t >= 1.0:
+            self.height = 0.0
             self.set_state('under')
 
     def update_under(self, frame_time, obstacles, target):
-        # 물속에서는 벽과 저수조를 무시하고 카이 쪽으로 다가감 (물결만 보임)
-        dx, dy = self.face_target(target)
+        # 물속(물결)에서 카이와 가장 가까운 물가 쪽으로 헤엄쳐 감
+        tx, ty = bb_center(target.get_bb())
+        wx, wy = self.water_point(tx, ty - FOOT_HEIGHT / 2)
+        dx, dy = wx - self.x, wy - self.y
         length = math.hypot(dx, dy)
         if length > 1:
+            self.face(dx, dy)
             step = min(length, UNDER_SPEED * frame_time)
             self.x += dx / length * step
             self.y += dy / length * step
         if self.state_time >= UNDER_TIME:
-            self.emerge_point = self.find_emerge_point(target, obstacles)
-            self.x, self.y = self.emerge_point
+            self.face_target(target)
             self.set_state('rise')
 
-    def find_emerge_point(self, target, obstacles):
-        # 카이 둘레 EMERGE_OFFSET 거리의 여러 방향 중 발 박스가 장애물에 겹치지 않는 곳 (지금 다가오던 쪽을 먼저)
+    def update_rise(self, frame_time, obstacles, target):
+        # 물 위로 떠올라 카이를 노려봄. 다 떠오르면 그 순간 카이가 있던 자리로 뛰어오름
+        self.face_target(target)
+        if self.state_time >= RISE_TIME:
+            self.jump_from = (self.x, self.y)
+            self.jump_to = self.find_landing_point(target, obstacles)
+            self.set_state('leap')
+
+    def find_landing_point(self, target, obstacles):
+        # 카이의 발 자리(너무 멀면 LEAP_RANGE까지). 킹 랫의 발 박스가 장애물에 겹치면 가까운 빈 곳
         tx, ty = bb_center(target.get_bb())
-        start = math.atan2(self.y + FOOT_HEIGHT / 2 - ty, self.x - tx)
-        for radius in (EMERGE_OFFSET, EMERGE_OFFSET * 1.8, EMERGE_OFFSET * 2.6):
-            for i in range(12):
-                angle = start + math.radians(30 * ((i + 1) // 2) * (1 if i % 2 else -1))
-                x, y = tx + math.cos(angle) * radius, ty + math.sin(angle) * radius - FOOT_HEIGHT / 2
+        ty -= FOOT_HEIGHT / 2
+        dx, dy = tx - self.x, ty - self.y
+        length = math.hypot(dx, dy)
+        if length > LEAP_RANGE:
+            tx, ty = self.x + dx / length * LEAP_RANGE, self.y + dy / length * LEAP_RANGE
+        back = math.atan2(-dy, -dx)  # 킹 랫 쪽(저수조 쪽)부터 찾음
+        for radius in (0, 30, 60, 90, 120, 160):
+            for i in range(12 if radius else 1):
+                angle = back + math.radians(30 * ((i + 1) // 2) * (1 if i % 2 else -1))
+                x, y = tx + math.cos(angle) * radius, ty + math.sin(angle) * radius
                 bb = (x - FOOT_HALF_WIDTH, y, x + FOOT_HALF_WIDTH, y + FOOT_HEIGHT)
                 if not collide_any(bb, obstacles) and self.in_room(x, y):
                     return x, y
-        return self.x, self.y
+        return self.pool_edge_point()
 
     def in_room(self, x, y):
         left, bottom, right, top = self.room_bounds
         return left + FOOT_HALF_WIDTH <= x <= right - FOOT_HALF_WIDTH and bottom <= y <= top - FOOT_HEIGHT
 
-    def update_rise(self, frame_time, obstacles, target):
-        if self.state_time >= RISE_TIME:
-            self.set_state('burst')
-            self.wet_time = WET_TIME  # 튀어나온 뒤 1.5초 동안 젖어 있음 (불을 맞히면 증기 폭발)
-            self.face_target(target)
-            if self.distance_to(target) <= BURST_RADIUS:
-                x, y = bb_center(self.get_bb())
-                tx, ty = bb_center(target.get_bb())
-                length = math.hypot(tx - x, ty - y)
-                target.on_hit(*(((tx - x) / length, (ty - y) / length) if length else (0, -1)), BURST_DAMAGE)
-
-    def update_burst(self, frame_time, obstacles, target):
-        if self.state_time >= BURST_TIME:
-            self.set_state('shake')
+    def update_leap(self, frame_time, obstacles, target):
+        # 포물선을 그리며 날아가 착지. 착지할 때 가까이 있는 카이에게 피해를 주고, 젖은 채로 1.5초
+        t = min(1.0, self.state_time / LEAP_TIME)
+        (x1, y1), (x2, y2) = self.jump_from, self.jump_to
+        self.x, self.y = x1 + (x2 - x1) * t, y1 + (y2 - y1) * t
+        self.height = math.sin(math.pi * t) * LEAP_HEIGHT
+        if t < 1.0:
+            return
+        self.height = 0.0
+        self.wet_time = WET_TIME
+        self.set_state('shake')
+        if self.distance_to(target) <= BURST_RADIUS:
+            x, y = bb_center(self.get_bb())
+            tx, ty = bb_center(target.get_bb())
+            length = math.hypot(tx - x, ty - y)
+            target.on_hit(*(((tx - x) / length, (ty - y) / length) if length else (0, -1)), BURST_DAMAGE)
 
     def update_shake(self, frame_time, obstacles, target):
         if self.state_time >= SHAKE_TIME:
@@ -440,21 +523,23 @@ class KingRat:
         t = self.state_time
         if self.is_dead() or self.is_knocked_back():
             return HIT_COL
-        # 잠수 패턴(물속, 튀어나옴, 물 털기)은 상태와 상관없이 그 모습을 보여줌
+        # 잠수 패턴(뛰어듦, 물속, 떠오름, 뛰어오름, 물 털기)은 상태와 상관없이 그 모습을 보여줌
         if self.state == 'dive':
-            return DIVE_COL
+            # 공중에서는 몸을 날리는 모습, 물에 닿을 즈음부터 물보라
+            return DIVE_COL if self.state_time >= DIVE_TIME * 0.6 else BURST_COL
         if self.state == 'under':
             return UNDER_COL
         if self.state == 'rise':
             return RISE_COL
-        if self.state == 'burst':
-            return BURST_COL
+        if self.state == 'leap':
+            # 물을 박차고 오를 때는 물기둥, 공중에서는 물을 흩뿌리는 모습
+            return BURST_COL if self.state_time < LEAP_TIME * 0.3 else SHAKE_COL
         if self.state == 'shake':
             return SHAKE_COL
         offset = self.status_offset()
         if offset is not None:
             # 상태별 구간에는 걷기만 있으므로 다른 동작 중에도 그 구간의 프레임으로 상태 모습을 유지
-            return offset + (walk_col if self.state == 'walk' else WALK_COLS[0])
+            return offset + (walk_col if self.state in ('walk', 'to_pool') else WALK_COLS[0])
         if self.flash_time > 0:
             return HIT_COL
         if self.state == 'spit_ready':
@@ -465,19 +550,31 @@ class KingRat:
             return SPIT_RECOVER_COLS[min(int(t / (SPIT_RECOVER_TIME / 3)), 2)]
         if self.state == 'land':
             return LAND_COL
-        return walk_col
+        return walk_col  # 걷기, 저수조로 달려가기
 
     def draw(self):
         size = FRAME_SIZE * KINGRAT_SCALE
-        center_y = self.y + (FRAME_SIZE / 2 - GROUND_MARGIN) * KINGRAT_SCALE
+        center_y = self.y + (FRAME_SIZE / 2 - GROUND_MARGIN) * KINGRAT_SCALE + self.height
+        if self.state == 'leap':
+            self.draw_landing_mark()
         if self.is_dead():
             KingRat.image.opacify(max(0.0, 1 - self.death_time / DEATH_TIME))
         KingRat.image.clip_draw(self.current_col() * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                                 FRAME_SIZE, FRAME_SIZE, self.x, center_y, size, size)
         KingRat.image.opacify(1)
 
+    def draw_landing_mark(self):
+        # 뛰어올라 착지할 자리를 붉은 원으로 미리 보여줌 (착지가 가까울수록 커지고 진해짐)
+        x, y = self.jump_to
+        t = min(1.0, self.state_time / LEAP_TIME)
+        cy = y + FOOT_HEIGHT / 2
+        for i in range(3):
+            draw_circle(int(x), int(cy), int(BURST_RADIUS * (0.55 + 0.45 * t)) - i, 255, 60, 60, int(120 + 135 * t))
+
     def draw_range(self):
         # 디버그용: 튀어나올 때 피해를 주는 범위
+        if self.state == 'to_pool':
+            draw_circle(int(self.jump_from[0]), int(self.jump_from[1]), 6, 80, 200, 255)
         if self.state in ('under', 'rise'):
-            x, y = bb_center(self.get_bb())
-            draw_circle(int(x), int(y), BURST_RADIUS, 80, 200, 255)
+            left, bottom, right, top = self.pool_box
+            draw_rectangle(left, bottom, right, top, 80, 200, 255)

@@ -28,7 +28,8 @@ KINGRAT_OBSTACLES = [
     (596, 128, 686, 186, OBJECT),  # 전기 장치
 ]
 KINGRAT_START_IMAGE_POS = (260, 230)  # 킹 랫 시작 위치: 왼쪽 위 쥐구멍 앞 (발 가운데)
-ROOM_BOX = (64, 135, 960, 705)        # 방 안쪽 (독 침이 날아가는 범위, 킹 랫이 튀어나올 수 있는 범위)
+ROOM_BOX = (64, 135, 960, 705)
+POOL_WATER_BOX = (262, 338, 766, 572)  # 저수조의 물 부분 (킹 랫이 뛰어들어 헤엄치는 곳)        # 방 안쪽 (독 침이 날아가는 범위, 킹 랫이 튀어나올 수 있는 범위)
 # 패턴 C: 킹 랫의 HP가 50% 이하가 되면 방 가장자리 네 곳에 화재 타일이 생김 (물로 꺼야 지나갈 수 있음)
 FIRE_TILE_BOXES = [
     (66, 390, 130, 442),    # 왼쪽
@@ -127,7 +128,8 @@ def init():
     if boss_font is None:
         boss_font = load_font(FONT_PATH, 20)
     kingrat = KingRat(background.to_canvas_x(KINGRAT_START_IMAGE_POS[0]),
-                      background.to_canvas_y(KINGRAT_START_IMAGE_POS[1]), to_canvas_box(ROOM_BOX))
+                      background.to_canvas_y(KINGRAT_START_IMAGE_POS[1]), to_canvas_box(ROOM_BOX),
+                      to_canvas_box(POOL_WATER_BOX))
     game_world.hittables = [kingrat]
     hud = ElementHud()
     kai = Kai(0, 0)
@@ -172,7 +174,8 @@ def update(frame_time):
         notice = Notice(FIRE_TILE_NOTICE_TEXT, FIRE_TILE_NOTICE_HOLD)
     update_obstacles()
     # 서 있던 자리에 장애물(화재 타일)이 생기면 끼어서 못 움직이므로 밀어냄
-    for actor in (kai, kingrat):
+    # (물속이나 공중에 있는 킹 랫은 저수조 위에 있어도 되므로 빼고)
+    for actor in [kai] + ([] if kingrat.ignores_obstacles() else [kingrat]):
         offset = push_out_offset(actor.get_bb(), obstacle_bbs())
         if offset:
             actor.x += offset[0]
