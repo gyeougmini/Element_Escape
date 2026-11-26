@@ -3,7 +3,9 @@ from pico2d import *
 import game_framework
 import game_world
 from background import Background, WALL, OBJECT
+from bat import spawn_bats
 from brute import Brute
+from rat import spawn_rats
 from collision import draw_bb, push_out_offset
 from glass_bridge import GlassBridge
 from hud import ElementHud
@@ -30,12 +32,24 @@ WATERWAY_OBSTACLES = [
 # 물길 가운데 유리판: 불(용암구체) 공격에 맞으면 급랭되어 돌 발판이 되고, 그 위로 물길을 건널 수 있음
 GLASS_BOX = (448, 332, 576, 448)   # 유리판 그림의 자리
 BRIDGE_PATH = (460, 318, 566, 455)  # 유리판이 막고 있는 길 (위아래 난간 기둥 사이)
+BRIDGE_MARGIN = 30   # 다리로 건널 때 기둥에 걸리지 않도록 다리 양쪽 끝에서 이만큼 안쪽으로 걸음 (px)
+BRIDGE_STEP_OUT = 24  # 다리 앞에서 기다리는 자리: 물길 끝에서 이만큼 떨어진 곳 (px)
 # 하수 변이체(brute) 2마리: 물길 건너편(위쪽)에서 각자의 줄을 좌우로 순찰. 죽지 않으므로 증기로 시선을 가려 피해야 함
 # (발 가운데 x, 발 y, 순찰 왼쪽 끝 x, 오른쪽 끝 x, 처음 걷는 방향), 모두 waterway_bg.png 기준
 BRUTES = [
     (300, 222, 100, 920, 1),    # 위쪽 줄 (기계들 앞)
     (760, 292, 100, 920, -1),   # 아래쪽 줄 (물길 난간 앞)
 ]
+# 실험 쥐 2마리: 물길 양쪽 바닥에 무작위로 (waterway_bg.png 기준 (left, top, right, bottom)). 물을 건너지 못함
+RAT_COUNT = 2
+RAT_AREAS = [
+    (70, 195, 955, 310),   # 건너편 (기계들 앞)
+    (70, 465, 700, 690),   # 입구 쪽 (오른쪽 아래 입구 근처는 뺌)
+]
+# 변이 박쥐 2마리: 날아다니므로 물길 위도 자유롭게 오감. 방 안쪽 전체를 날아다님
+BAT_COUNT = 2
+BAT_AREAS = [(90, 150, 940, 680)]     # 처음 놓이는 범위
+BAT_BOUNDS = (70, 140, 954, 700)      # 날아다닐 수 있는 범위 (그림자 가운데 기준)
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -56,20 +70,78 @@ def update_obstacles():
     game_world.obstacles = background.get_obstacles() + ([bridge_obstacle] if bridge_obstacle else [])
 
 
+def bank(y):
+    """캔버스 y가 물길의 어느 쪽인지: 'up'(건너편), 'down'(입구 쪽), 'bridge'(물길 위, 다리)"""
+    left, bottom, right, top = bridge.path_bb
+    if y > top:
+        return 'up'
+    if y < bottom:
+        return 'down'
+    return 'bridge'
+
+
+def route(x, y, tx, ty):
+    """하수 변이체가 (x, y)에서 (tx, ty)로 가려면 먼저 향할 곳. 물길 건너편은 돌 다리로만 갈 수 있음 (없으면 None)"""
+    from_bank, to_bank = bank(y), bank(ty)
+    if from_bank == to_bank:
+        return tx, ty
+    if not bridge.is_stone():
+        return None
+    left, bottom, right, top = bridge.path_bb
+    lane_left, lane_right = left + BRIDGE_MARGIN, right - BRIDGE_MARGIN
+    center_x = (left + right) / 2
+    in_lane = lane_left <= x <= lane_right
+    if to_bank == 'bridge':
+        # 다리 위의 카이: 다리 줄에 들어섰으면 곧장, 아니면 다리 앞으로
+        if in_lane:
+            return min(max(tx, lane_left), lane_right), ty
+        return center_x, (top + BRIDGE_STEP_OUT if from_bank == 'up' else bottom - BRIDGE_STEP_OUT)
+    exit_y = top + BRIDGE_STEP_OUT if to_bank == 'up' else bottom - BRIDGE_STEP_OUT
+    if from_bank == 'bridge' or in_lane:
+        return center_x, exit_y  # 다리를 따라 곧장 건넘
+    return center_x, (top + BRIDGE_STEP_OUT if from_bank == 'up' else bottom - BRIDGE_STEP_OUT)  # 다리 앞으로
+
+
+def can_walk_to(enemy, target):
+    """쥐나 바닥에 떨어진 박쥐가 target에게 걸어갈 수 있는지: 물길의 같은 쪽이거나 어느 한쪽이 다리 위에 있을 때만
+    (쥐와 박쥐는 다리로 돌아가는 길을 찾지 못하므로 건너편의 카이는 쫓지 않음)"""
+    _, enemy_y = bb_center(enemy.get_bb())
+    _, target_y = bb_center(target.get_bb())
+    banks = (bank(enemy_y), bank(target_y))
+    return banks[0] == banks[1] or 'bridge' in banks
+
+
+def to_canvas_box(box):
+    left, top, right, bottom = box
+    return (background.to_canvas_x(left), background.to_canvas_y(bottom),
+            background.to_canvas_x(right), background.to_canvas_y(top))
+
+
+def bb_center(bb):
+    left, bottom, right, top = bb
+    return (left + right) / 2, (bottom + top) / 2
+
+
 def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles]
 
 
 def init():
-    global background, bridge, brutes, kai, hud
+    global background, bridge, brutes, rats, bats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WATERWAY_IMAGE, None, WATERWAY_OBSTACLES)
     bridge = GlassBridge(background, GLASS_BOX, BRIDGE_PATH)
     update_obstacles()
     brutes = [Brute(background.to_canvas_x(x), background.to_canvas_y(y),
-                    background.to_canvas_x(left), background.to_canvas_x(right), start_dir)
+                    background.to_canvas_x(left), background.to_canvas_x(right), start_dir, route)
               for x, y, left, right, start_dir in BRUTES]
-    game_world.hittables = brutes  # 죽지 않으므로 늘 공격에 맞음 (피해는 없고 불타는/젖음 상태만)
+    start = (background.to_canvas_x(KAI_START_IMAGE_POS[0]), background.to_canvas_y(KAI_START_IMAGE_POS[1]))
+    rats = spawn_rats(RAT_COUNT, [to_canvas_box(area) for area in RAT_AREAS], obstacle_bbs())
+    bats = spawn_bats(BAT_COUNT, [to_canvas_box(area) for area in BAT_AREAS], to_canvas_box(BAT_BOUNDS), start)
+    for enemy in rats + bats:
+        enemy.can_reach = can_walk_to
+    # 변이체는 죽지 않으므로 늘 공격에 맞음 (피해는 없고 불타는/젖음 상태만)
+    game_world.hittables = brutes + rats + bats
     hud = ElementHud()
     kai = Kai(0, 0)
     if carried_stats:
@@ -104,14 +176,24 @@ def handle_events():
 def update(frame_time):
     bridge.update(frame_time)
     update_obstacles()
-    offset = push_out_offset(kai.get_bb(), obstacle_bbs())
-    if offset:
-        kai.x += offset[0]
-        kai.y += offset[1]
+    # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
+    # (물에 맞아 떨어진 박쥐가 물길 위였으면 가까운 쪽 바닥으로. 날고 있는 박쥐는 물 위에 있어도 됨)
+    for actor in [kai] + rats + [bat for bat in bats if not bat.is_flying()]:
+        offset = push_out_offset(actor.get_bb(), obstacle_bbs())
+        if offset:
+            actor.x += offset[0]
+            actor.y += offset[1]
     kai.update(frame_time, obstacle_bbs())
     for brute in brutes:
         brute.update(frame_time, obstacle_bbs(), kai)
         brute.touch(kai)
+    for enemy in rats + bats:
+        enemy.update(frame_time, obstacle_bbs(), kai)
+        enemy.touch(kai)
+    # 쓰러지는 연출이 끝난 적은 지우고, HP가 남은 적만 공격에 맞도록 함
+    rats[:] = [rat for rat in rats if rat.alive]
+    bats[:] = [bat for bat in bats if bat.alive]
+    game_world.hittables = brutes + [enemy for enemy in rats + bats if not enemy.is_dead()]
     game_world.update(frame_time)
     hud.update(frame_time, kai)
 
@@ -120,8 +202,12 @@ def draw():
     background.draw()
     bridge.draw()  # 돌로 굳은 발판 (배경 그림의 유리판 위에 덮어 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
-    for actor in sorted([kai] + brutes, key=lambda a: a.foot_y(), reverse=True):
+    # 날고 있는 박쥐는 공중에 있으므로 모든 것 위에 그림
+    grounded = [kai] + brutes + rats + [bat for bat in bats if not bat.is_flying()]
+    for actor in sorted(grounded, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
+    for bat in sorted([bat for bat in bats if bat.is_flying()], key=lambda a: a.foot_y(), reverse=True):
+        bat.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
     if show_bbs:
@@ -132,6 +218,10 @@ def draw():
             draw_bb(brute.get_bb())
             draw_bb(brute.get_hit_bb())
             brute.draw_chase_range()
+        for enemy in rats + bats:
+            draw_bb(enemy.get_bb())
+            draw_bb(enemy.get_hit_bb())
+            enemy.draw_chase_range()
         for o in game_world.objects:
             if hasattr(o, 'draw_range'):
                 o.draw_range()  # 증기가 시야를 가리는 범위

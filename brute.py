@@ -42,8 +42,8 @@ HIT_TOP = 92 * BRUTE_SCALE
 PATROL_SPEED = 60     # 좌우로 순찰할 때 (초당 픽셀)
 CHASE_SPEED = 150     # 카이를 추적할 때: 카이(200)보다 느려서 달아날 수 있음
 RETURN_SPEED = 80     # 놓친 뒤 순찰하던 줄로 돌아갈 때
-DETECT_RANGE = 230    # 이 거리(px) 안에서 카이가 보이면(증기에 가리지 않으면) 발견
-LOSE_RANGE = 330      # 추적 중 카이가 이보다 멀어지거나 증기에 가리면 놓침
+DETECT_RANGE = 200    # 이 거리(px) 안에서 카이가 보이면(증기에 가리지 않으면) 발견
+LOSE_RANGE = 300      # 추적 중 카이가 이보다 멀어지거나 증기에 가리면 놓침
 ROAR_TIME = 0.5       # 발견했을 때 포효하는 시간(초): 이 동안은 멈춰 있음
 CONFUSED_TIME = 1.6   # 놓쳤을 때 두리번거리는 시간(초)
 
@@ -77,13 +77,16 @@ def bb_center(bb):
 class Brute:
     image = None
 
-    def __init__(self, x, y, left_x, right_x, start_dir=1):
+    def __init__(self, x, y, left_x, right_x, start_dir=1, route=None):
         # (x, y): 발 가운데. left_x ~ right_x 사이의 이 줄(y)을 좌우로 순찰함
+        # route(x, y, tx, ty): 발 가운데 (x, y)에서 (tx, ty)로 가려면 먼저 향할 곳 (x, y), 갈 수 없으면 None
+        #   (예: 물길 건너편은 다리로 돌아가야 하고, 다리가 없으면 갈 수 없음). 없으면 곧장 향함
         if Brute.image is None:
             Brute.image = load_image(BRUTE_IMAGE)
         self.x, self.y = x, y
         self.patrol_y = y
         self.left_x, self.right_x = left_x, right_x
+        self.route = route or (lambda x, y, tx, ty: (tx, ty))
         self.patrol_dir = start_dir
         self.row = DIRECTION_ROWS[(start_dir, 0)]
         self.state = 'patrol'  # patrol, roar, chase, attack, confused, return
@@ -137,12 +140,23 @@ class Brute:
         return math.hypot(tx - x, ty - y)
 
     def can_see(self, target, max_range):
-        # 거리 안에 있고, 둘 사이의 시선이 증기에 가리지 않으면 보임
+        # 거리 안에 있고, 둘 사이의 시선이 증기에 가리지 않으며, 갈 수 있는 곳에 있으면 추적 대상으로 봄
+        # (물길 건너편처럼 갈 방법이 없는 곳의 카이는 보여도 쫓지 않음)
         if self.distance_to(target) > max_range:
             return False
         x, y = bb_center(self.get_bb())
         tx, ty = bb_center(target.get_bb())
-        return not steam.blocks_sight(x, y, tx, ty)
+        return not steam.blocks_sight(x, y, tx, ty) and self.route(x, y, tx, ty) is not None
+
+    def go_to(self, tx, ty, speed, frame_time, obstacles):
+        """발 가운데를 (tx, ty)로 길을 따라 옮김. 다 왔으면 True, 갈 수 없으면 None"""
+        x, y = bb_center(self.get_bb())
+        waypoint = self.route(x, y, tx, ty)
+        if waypoint is None:
+            return None
+        wx, wy = waypoint
+        arrived = self.move_toward(wx, wy - FOOT_HEIGHT / 2, speed, frame_time, obstacles)
+        return arrived and waypoint == (tx, ty)
 
     # ---- 공격에 맞음 (피해는 받지 않음) ----
     def steam_explode(self, dir_x, dir_y):
@@ -249,7 +263,9 @@ class Brute:
         elif self.state == 'return':
             # 순찰하던 줄에서 가장 가까운 곳으로 돌아감
             tx = min(max(self.x, self.left_x), self.right_x)
-            if self.move_toward(tx, self.patrol_y, RETURN_SPEED * self.speed_rate(), frame_time, obstacles):
+            arrived = self.go_to(tx, self.patrol_y + FOOT_HEIGHT / 2, RETURN_SPEED * self.speed_rate(), frame_time, obstacles)
+            if arrived is not False:  # 도착했거나 (길이 막혀) 갈 수 없으면 그 자리에서 순찰
+                self.patrol_y = self.y if arrived is None else self.patrol_y
                 self.set_state('patrol')
 
     def update_patrol(self, frame_time, obstacles):
@@ -267,7 +283,8 @@ class Brute:
             self.set_state('attack')
             return
         if not collide(self.get_bb(), target.get_bb()):
-            self.move_toward(tx, ty - FOOT_HEIGHT / 2, CHASE_SPEED * self.speed_rate(), frame_time, obstacles)
+            # 물길 건너편이면 다리를 거쳐 감
+            self.go_to(tx, ty, CHASE_SPEED * self.speed_rate(), frame_time, obstacles)
 
     def update_attack(self, target):
         # 팔을 든 뒤 내려찍는 순간 카이가 범위 안에 있으면 피해를 주고 밀어냄

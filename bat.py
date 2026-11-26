@@ -67,6 +67,9 @@ def bb_center(bb):
 
 
 class Bat:
+    # can_reach(bat, target): 바닥에 떨어진(젖은) 박쥐가 target에게 걸어갈 수 있는지. None이면 언제나 갈 수 있음
+    # (날고 있을 때는 벽과 물 위로도 다니므로 따지지 않음)
+    can_reach = None
     """박쥐: 날아다니는 적. 날 때는 벽과 물체 위로도 지나다니고, 가까이 온 카이를 추적함.
     물 공격에 맞으면 바닥에 떨어져 느려지고, 불 공격에 맞으면 공중에서 불타며 지속 피해를 받음"""
     image = None
@@ -239,7 +242,8 @@ class Bat:
             self.knockback_time -= frame_time
             return
         # 증기 안에 있으면 카이를 보지 못해 추적하지 못하고 돌아다니기만 함
-        if self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self):
+        reachable = self.is_flying() or self.can_reach is None or self.can_reach(self, target)
+        if self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self) and reachable:
             # 카이 쪽으로 곧장 다가감 (날 때는 벽 위로도)
             self.chasing = True
             tx, ty = bb_center(target.get_bb())

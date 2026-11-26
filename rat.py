@@ -71,6 +71,8 @@ def bb_center(bb):
 
 
 class Rat:
+    # can_reach(rat, target): 이 쥐가 target에게 걸어갈 수 있는지 (예: 물길 건너편이면 False). None이면 언제나 갈 수 있음
+    can_reach = None
     """실험 쥐: 멈췄다가 무작위 방향으로 걷기를 반복하며 돌아다니고, 카이가 가까이 오면 추적"""
     image = None
 
@@ -268,7 +270,8 @@ class Rat:
                 self.alive = False
             return
         # 증기 안에 있으면 카이를 보지 못해 추적하지 못하고 돌아다니기만 함
-        if target and self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self):
+        if (target and self.distance_to(target) <= CHASE_RANGE and not steam.in_steam(self)
+                and (self.can_reach is None or self.can_reach(self, target))):
             self.chasing = True
             self.chase(target, frame_time, obstacles)
             return
