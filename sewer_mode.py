@@ -6,7 +6,9 @@ from background import Background, WALL, OBJECT
 from brute import Brute
 from drone import Drone
 from potion import Potion
-from collision import draw_bb, push_out_offset
+from collision import collide, draw_bb, push_out_offset
+from notice import Notice
+from sliding_door import SlidingDoor
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 
@@ -47,6 +49,13 @@ DRONES = [(146, 225), (473, 619)]
 DRONE_BOUNDS = (70, 140, 954, 700)  # 날아다닐 수 있는 범위 (그림자 가운데 기준, (left, top, right, bottom))
 # 바닥에 놓인 물약 (종류, 그림자 가운데 x, 그림자 아래쪽 끝 y)
 POTIONS = [('hp', 84, 690), ('ep', 930, 482)]
+# 오른쪽 위 저수조 문: 배경에 그려진 두 짝 미닫이 문과 가운데 갈라지는 x
+# 카이가 문 앞(RESERVOIR_FRONT_BOX)에 오면 열림. 단, 적에게 쫓기는 중이면 열리지 않음
+RESERVOIR_DOOR_BOX = (824, 77, 904, 128)
+RESERVOIR_DOOR_SEAM_X = 864
+RESERVOIR_FRONT_BOX = (800, 135, 930, 235)  # 문 앞 (sewer_bg.png 기준 (left, top, right, bottom))
+CHASED_NOTICE_TEXT = '적에게 쫓기는 중에는\n문이 열리지 않는다!'
+CHASED_NOTICE_HOLD = 1.5
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -128,15 +137,38 @@ def sight(x, y, tx, ty):
     return background.to_canvas_x(left) <= cross_x <= background.to_canvas_x(right)
 
 
+def is_chased():
+    """적(하수 변이체, 드론) 중 하나라도 카이를 쫓고 있는지"""
+    return (any(brute.is_chasing() for brute in brutes)
+            or any(drone.chasing and not drone.is_dead() for drone in drones))
+
+
+def update_reservoir_door():
+    # 문 앞에 오면 열림. 쫓기는 중이면 열리지 않고, 문 앞에 들어설 때마다 한 번 안내를 띄움
+    global notice, was_in_front
+    in_front = collide(kai.get_bb(), reservoir_front_bb)
+    if in_front and not reservoir_door.is_opening():
+        if not is_chased():
+            reservoir_door.open()
+        elif not was_in_front:
+            notice = Notice(CHASED_NOTICE_TEXT, CHASED_NOTICE_HOLD)
+    was_in_front = in_front
+
+
 def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles]
 
 
 def init():
     global background, brutes, drones, potions, kai, hud
+    global reservoir_door, reservoir_front_bb, was_in_front, notice
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, SEWER_IMAGE, None, SEWER_OBSTACLES)
     game_world.obstacles = background.get_obstacles()
+    reservoir_door = SlidingDoor(background, RESERVOIR_DOOR_BOX, RESERVOIR_DOOR_SEAM_X)
+    reservoir_front_bb = to_canvas_box(RESERVOIR_FRONT_BOX)
+    was_in_front = False
+    notice = None  # 쫓기는 중에 문 앞에 오면 나오는 안내
     brutes = [Brute(background.to_canvas_x(x), background.to_canvas_y(y),
                     background.to_canvas_x(left), background.to_canvas_x(right), start_dir, route, sight)
               for x, y, left, right, start_dir in BRUTES]
@@ -176,6 +208,7 @@ def handle_events():
 
 
 def update(frame_time):
+    global notice
     offset = push_out_offset(kai.get_bb(), obstacle_bbs())
     if offset:
         kai.x += offset[0]
@@ -189,6 +222,12 @@ def update(frame_time):
     for potion in potions:
         potion.update(frame_time, kai)
     potions[:] = [potion for potion in potions if potion.alive]
+    update_reservoir_door()
+    reservoir_door.update(frame_time)
+    if notice:
+        notice.update(frame_time)
+        if notice.is_done():
+            notice = None
     drones[:] = [drone for drone in drones if drone.alive]
     # 하수 변이체는 죽지 않으므로 늘 공격에 맞음 (피해는 없고 불타는/젖음 상태만)
     game_world.hittables = brutes + [drone for drone in drones if not drone.is_dead()]
@@ -198,6 +237,7 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    reservoir_door.draw()  # 열리는 저수조 문 (배경 그림의 일부라서 배경 바로 위에 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함. 드론은 공중에 있으므로 모든 것 위에 그림
     for actor in sorted([kai] + brutes + potions, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
@@ -205,10 +245,13 @@ def draw():
         drone.draw()
     game_world.draw()
     hud.draw(kai.active_elements())
+    if notice:
+        notice.draw()
     if show_bbs:
         for bb in obstacle_bbs():
             draw_bb(bb)
         draw_bb(kai.get_bb())
+        draw_bb(reservoir_front_bb)
         for enemy in brutes + drones:
             draw_bb(enemy.get_bb())
             draw_bb(enemy.get_hit_bb())
