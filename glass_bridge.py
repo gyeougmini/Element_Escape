@@ -1,5 +1,3 @@
-import os
-
 from pico2d import *
 
 import game_world
@@ -7,24 +5,29 @@ import steam
 
 # 수로 가운데 물길 위의 유리판: 처음에는 지나갈 수 없고, 불(용암구체) 공격에 맞으면 물에 급랭되어 돌로 변해
 # 물길을 건너는 발판이 됨. 물 공격에는 반응 없음
-# 돌 발판 그림(STONE_IMAGE)이 있으면 그것을 유리판 자리에 그리고, 없으면 회색 돌판을 직접 그려 대신함
-STONE_IMAGE = 'sprite_sheet/sprit_sheet_object/stone_bridge.png'
-COOL_TIME = 1.0  # 맞은 뒤 유리판이 돌로 바뀌어 가는 시간(초). 이 시간이 지나야 지나갈 수 있음
-
-# 그림이 없을 때 그리는 돌판 색
-STONE_COLOR = (118, 112, 104)
-STONE_EDGE_COLOR = (78, 74, 70)
-STONE_LIGHT_COLOR = (150, 144, 134)
-STONE_BLOCKS = (2, 3)  # 돌판을 가로 x 세로 몇 장으로 나누어 그릴지
+#
+# deep_water_sheet.png: 64x64 칸 4열 x 4행 (256x256)
+#   열(단계): 0 유리판 / 1 급랭되며 증기와 거품이 이는 유리판 / 2 막 굳어 아직 뜨거운 돌(주황 균열) / 3 식은 돌 발판
+#   행(조각): 0 왼쪽 위 / 1 오른쪽 위 / 2 왼쪽 아래 / 3 오른쪽 아래 -> 네 조각을 2x2로 붙이면 한 장의 판(128x128)
+DEEP_WATER_IMAGE = 'sprite_sheet/sprit_sheet_object/deep_water_sheet.png'
+TILE_SIZE = 64
+SHEET_HEIGHT = 256
+GLASS, QUENCH, HOT_STONE, STONE = 0, 1, 2, 3
+# (단계 열, 보여주는 시간(초)): 맞은 뒤 이 순서로 바뀌고, 마지막(식은 돌)에서 멈춤
+TIMELINE = [(QUENCH, 0.6), (HOT_STONE, 0.9)]
+COOL_TIME = sum(duration for _, duration in TIMELINE)  # 이 시간이 지나 식은 돌이 되어야 지나갈 수 있음
+BLEND_TIME = 0.2  # 다음 단계로 넘어가기 전 이 시간 동안 다음 단계 그림이 서서히 겹쳐짐
+# (조각 행, 판 안의 위치: 가로 0=왼쪽 1=오른쪽, 세로 0=아래 1=위)
+PIECES = [(0, 0, 1), (1, 1, 1), (2, 0, 0), (3, 1, 0)]
 
 
 class GlassBridge:
-    stone_image = None
+    image = None
 
     def __init__(self, background, glass_box, path_box):
         # glass_box: 유리판 그림의 자리, path_box: 유리판이 막고 있는 길 (둘 다 배경 이미지 기준 (left, top, right, bottom))
-        if GlassBridge.stone_image is None and os.path.exists(STONE_IMAGE):
-            GlassBridge.stone_image = load_image(STONE_IMAGE)
+        if GlassBridge.image is None:
+            GlassBridge.image = load_image(DEEP_WATER_IMAGE)
         self.glass_bb = self.to_canvas_box(background, glass_box)
         self.path_bb = self.to_canvas_box(background, path_box)
         self.cool_time = None  # 맞은 뒤 흐른 시간, None이면 아직 유리판
@@ -60,24 +63,32 @@ class GlassBridge:
             return None
         return (self.path_bb, False, self.on_fire_hit)
 
-    def draw(self):
-        # 굳어 가는 동안 돌판이 점점 진해지며 유리판을 덮음
+    def stages(self):
+        """지금 그릴 (단계, 다음 단계, 다음 단계가 겹쳐지는 정도 0~1)"""
         if self.cool_time is None:
-            return
-        alpha = self.cool_time / COOL_TIME
+            return GLASS, None, 0.0
+        t = self.cool_time
+        for i, (stage, duration) in enumerate(TIMELINE):
+            if t < duration:
+                next_stage = TIMELINE[i + 1][0] if i + 1 < len(TIMELINE) else STONE
+                blend = max(0.0, (t - (duration - BLEND_TIME)) / BLEND_TIME)
+                return stage, next_stage, blend
+            t -= duration
+        return STONE, None, 0.0
+
+    def draw_panel(self, stage, alpha):
+        # 단계 열의 네 조각을 2x2로 붙여 유리판 자리에 맞춰 그림
         left, bottom, right, top = self.glass_bb
-        if GlassBridge.stone_image:
-            GlassBridge.stone_image.opacify(alpha)
-            GlassBridge.stone_image.draw((left + right) / 2, (bottom + top) / 2, right - left, top - bottom)
-            GlassBridge.stone_image.opacify(1)
-            return
-        a = int(255 * alpha)
-        draw_rectangle(left, bottom, right, top, *STONE_EDGE_COLOR, a, filled=True)
-        cols, rows = STONE_BLOCKS
-        w, h = (right - left) / cols, (top - bottom) / rows
-        for c in range(cols):
-            for r in range(rows):
-                l, b = left + c * w + 2, bottom + r * h + 2
-                rr, t = l + w - 4, b + h - 4
-                draw_rectangle(l, b, rr, t, *STONE_COLOR, a, filled=True)
-                draw_rectangle(l, t - 3, rr, t, *STONE_LIGHT_COLOR, a, filled=True)  # 위쪽 모서리의 밝은 면
+        half_w, half_h = (right - left) / 2, (top - bottom) / 2
+        GlassBridge.image.opacify(alpha)
+        for row, col_x, col_y in PIECES:
+            GlassBridge.image.clip_draw(stage * TILE_SIZE, SHEET_HEIGHT - (row + 1) * TILE_SIZE, TILE_SIZE, TILE_SIZE,
+                                        left + half_w * (col_x + 0.5), bottom + half_h * (col_y + 0.5),
+                                        half_w, half_h)
+        GlassBridge.image.opacify(1)
+
+    def draw(self):
+        stage, next_stage, blend = self.stages()
+        self.draw_panel(stage, 1.0)
+        if next_stage is not None and blend > 0:
+            self.draw_panel(next_stage, blend)
