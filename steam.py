@@ -92,6 +92,21 @@ def explode_at(enemy, dir_x, dir_y):
                                   (foot_left + foot_right) / 2 + shift_x, (foot_bottom + foot_top) / 2 + shift_y))
 
 
+def segment_distance(px, py, x1, y1, x2, y2):
+    # 점 (px, py)에서 선분 (x1, y1)-(x2, y2)까지의 거리
+    dx, dy = x2 - x1, y2 - y1
+    length_sq = dx * dx + dy * dy
+    t = 0.0 if length_sq == 0 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / length_sq))
+    return math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+
+
+def blocks_sight(x1, y1, x2, y2):
+    """(x1, y1)에서 (x2, y2)를 바라보는 시선이 짙은 증기에 가려지는지 (둘 중 하나가 증기 안에 있어도 가려짐)"""
+    return any(isinstance(o, SteamExplosion) and o.time < FADE_START
+               and segment_distance(o.ground_x, o.ground_y, x1, y1, x2, y2) <= CLOUD_RADIUS
+               for o in game_world.objects)
+
+
 def in_steam(entity):
     """entity의 발이 짙은 증기 안에 있는지: 증기 안에서는 카이를 보지 못해 추적하지 못함"""
     left, bottom, right, top = entity.get_bb()
