@@ -44,10 +44,10 @@ WANDER_TIME = (1.0, 2.5)
 CHASE_RANGE = 230    # 이 거리 안에 카이가 보이면(증기에 가리지 않으면) 다가감
 ATTACK_RANGE = 170   # 이 거리 안이면 멈춰서 레이저를 쏨
 # 레이저: 충전하는 동안 조준한 쪽(충전을 시작할 때의 카이 자리)으로 쏘므로, 충전 중에 비켜서면 피할 수 있음
-CHARGE_TIME = 0.6
+CHARGE_TIME = 0.5
 FIRE_TIME = 0.2
-RECOVER_TIME = 0.3
-ATTACK_COOLDOWN = 1.4
+RECOVER_TIME = 0.25
+ATTACK_COOLDOWN = 1.1
 LASER_LENGTH = 260
 LASER_HIT_WIDTH = 16  # 카이의 발 가운데가 레이저 선에서 이 거리 안이면 맞음
 LASER_DAMAGE = 10
