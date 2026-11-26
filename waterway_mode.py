@@ -5,8 +5,10 @@ import game_world
 from background import Background, WALL, OBJECT
 from bat import spawn_bats
 from brute import Brute
+from flame import Flame
 from rat import spawn_rats
-from collision import draw_bb, push_out_offset
+from sliding_door import SlidingDoor
+from collision import collide, draw_bb, push_out_offset
 from glass_bridge import GlassBridge
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
@@ -50,6 +52,20 @@ RAT_AREAS = [
 BAT_COUNT = 2
 BAT_AREAS = [(90, 150, 940, 680)]     # 처음 놓이는 범위
 BAT_BOUNDS = (70, 140, 954, 700)      # 날아다닐 수 있는 범위 (그림자 가운데 기준)
+# 시작 자리(오른쪽 아래 입구) 왼쪽을 막고 타오르는 불길: 제어 상자 아래 파이프를 따라 세로로 세 칸
+# 제어 상자와 함께 오른쪽 아래 구역을 막으므로 물 공격으로 꺼야 나갈 수 있음
+# waterway_bg.png 기준 (left, top, right, bottom), 가로는 제어 상자 폭과 같음
+FLAME_BOXES = [
+    (708, 512, 764, 576),
+    (708, 576, 764, 640),
+    (708, 640, 764, 705),
+]
+# 불길에서 이 거리(px) 안으로 쥐나 떨어진 박쥐의 발이 들어오면 데어서 피해를 받고 밀려나며 불이 붙음 (보일러실과 같음)
+FLAME_RANGE = 16
+FLAME_DAMAGE = 10
+# 오른쪽 위 하수 터널 문: 배경에 그려진 두 짝 미닫이 문과 가운데 갈라지는 x. 돌 다리를 만드는 순간 열림
+TUNNEL_DOOR_BOX = (824, 77, 904, 128)
+TUNNEL_DOOR_SEAM_X = 864
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -65,9 +81,29 @@ def carry_over(kai):
 
 
 def update_obstacles():
-    # 유리판이 돌로 굳으면 지나갈 수 있으므로 매 프레임 합침
-    bridge_obstacle = bridge.get_obstacle()
-    game_world.obstacles = background.get_obstacles() + ([bridge_obstacle] if bridge_obstacle else [])
+    # 유리판이 돌로 굳거나 불길이 꺼지면 지나갈 수 있으므로 매 프레임 합침
+    object_obstacles = [o.get_obstacle() for o in [bridge] + flames]
+    game_world.obstacles = background.get_obstacles() + [o for o in object_obstacles if o]
+
+
+def touching_flame(enemy):
+    """적의 발 가까이에 있는 타는 불길, 없으면 None"""
+    left, bottom, right, top = enemy.get_bb()
+    reach = (left - FLAME_RANGE, bottom - FLAME_RANGE, right + FLAME_RANGE, top + FLAME_RANGE)
+    for flame in flames:
+        if flame.is_burning() and collide(reach, flame.get_bb()):
+            return flame
+    return None
+
+
+def burn_by_flame(enemy, flame):
+    # 불길 가운데에서 적 쪽으로 밀어냄 (파이어볼에 맞은 것과 같은 반응: 피해, 밀려남, 불붙음)
+    fx, fy = bb_center(flame.get_bb())
+    ex, ey = bb_center(enemy.get_bb())
+    dx, dy = ex - fx, ey - fy
+    length = (dx * dx + dy * dy) ** 0.5
+    dir_x, dir_y = (dx / length, dy / length) if length else (0, -1)
+    enemy.on_fireball_hit(dir_x, dir_y, FLAME_DAMAGE)
 
 
 def bank(y):
@@ -127,10 +163,12 @@ def obstacle_bbs():
 
 
 def init():
-    global background, bridge, brutes, rats, bats, kai, hud
+    global background, bridge, flames, tunnel_door, brutes, rats, bats, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WATERWAY_IMAGE, None, WATERWAY_OBSTACLES)
     bridge = GlassBridge(background, GLASS_BOX, BRIDGE_PATH)
+    flames = [Flame(background, box) for box in FLAME_BOXES]
+    tunnel_door = SlidingDoor(background, TUNNEL_DOOR_BOX, TUNNEL_DOOR_SEAM_X)
     update_obstacles()
     brutes = [Brute(background.to_canvas_x(x), background.to_canvas_y(y),
                     background.to_canvas_x(left), background.to_canvas_x(right), start_dir, route)
@@ -175,6 +213,13 @@ def handle_events():
 
 def update(frame_time):
     bridge.update(frame_time)
+    for flame in flames:
+        flame.update(frame_time)
+    flames[:] = [flame for flame in flames if flame.alive]  # 다 꺼진 불길은 지움
+    # 돌 다리를 만드는 순간(유리판이 불에 맞아 굳기 시작하면) 하수 터널 문이 열림
+    if not bridge.is_glass():
+        tunnel_door.open()
+    tunnel_door.update(frame_time)
     update_obstacles()
     # 서 있던 자리에 장애물이 생기면 끼어서 못 움직이므로 밀어냄
     # (물에 맞아 떨어진 박쥐가 물길 위였으면 가까운 쪽 바닥으로. 날고 있는 박쥐는 물 위에 있어도 됨)
@@ -190,6 +235,12 @@ def update(frame_time):
     for enemy in rats + bats:
         enemy.update(frame_time, obstacle_bbs(), kai)
         enemy.touch(kai)
+        # 쥐와 바닥에 떨어진 박쥐는 불길에 닿으면 덴다 (날고 있는 박쥐는 불길 위를 지나감)
+        on_ground = not hasattr(enemy, 'is_flying') or not enemy.is_flying()
+        if on_ground and not enemy.is_dead() and not enemy.is_knocked_back():
+            flame = touching_flame(enemy)
+            if flame:
+                burn_by_flame(enemy, flame)
     # 쓰러지는 연출이 끝난 적은 지우고, HP가 남은 적만 공격에 맞도록 함
     rats[:] = [rat for rat in rats if rat.alive]
     bats[:] = [bat for bat in bats if bat.alive]
@@ -200,10 +251,11 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    tunnel_door.draw()  # 열리는 하수 터널 문 (배경 그림의 일부라서 배경 바로 위에 그림)
     bridge.draw()  # 돌로 굳은 발판 (배경 그림의 유리판 위에 덮어 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
     # 날고 있는 박쥐는 공중에 있으므로 모든 것 위에 그림
-    grounded = [kai] + brutes + rats + [bat for bat in bats if not bat.is_flying()]
+    grounded = [kai] + brutes + rats + flames + [bat for bat in bats if not bat.is_flying()]
     for actor in sorted(grounded, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
     for bat in sorted([bat for bat in bats if bat.is_flying()], key=lambda a: a.foot_y(), reverse=True):
