@@ -4,6 +4,7 @@ import game_framework
 import game_world
 from background import Background, WALL, OBJECT
 from collision import draw_bb, push_out_offset
+from glass_bridge import GlassBridge
 from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 
@@ -16,14 +17,18 @@ WATERWAY_OBSTACLES = [
     (0, 705, 1024, 768, WALL),   # 아래 (오른쪽 아래 입구 포함)
     (0, 0, 64, 768, WALL),       # 왼쪽
     (960, 0, 1024, 768, WALL),   # 오른쪽
-    # 가운데를 가로지르는 물길 (난간 포함): 아직 건너갈 방법이 없어 위아래를 막음
-    (64, 318, 960, 455, WALL),
+    # 가운데를 가로지르는 물길 (난간 포함): 유리판 자리(난간 기둥 사이)만 빼고 막음
+    (64, 318, 460, 455, WALL),
+    (566, 318, 960, 455, WALL),
     # 물체
     (330, 135, 440, 188, OBJECT),  # 왼쪽 위 기계
     (585, 135, 695, 188, OBJECT),  # 파란 탱크
     (708, 452, 764, 512, OBJECT),  # 물길 아래 제어 상자
     (840, 600, 882, 626, OBJECT),  # 오른쪽 아래 나무 상자
 ]
+# 물길 가운데 유리판: 불(용암구체) 공격에 맞으면 급랭되어 돌 발판이 되고, 그 위로 물길을 건널 수 있음
+GLASS_BOX = (448, 332, 576, 448)   # 유리판 그림의 자리
+BRIDGE_PATH = (460, 318, 566, 455)  # 유리판이 막고 있는 길 (위아래 난간 기둥 사이)
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -38,15 +43,22 @@ def carry_over(kai):
     carried_stats = (kai.hp, kai.energy, kai.water_unlocked)
 
 
+def update_obstacles():
+    # 유리판이 돌로 굳으면 지나갈 수 있으므로 매 프레임 합침
+    bridge_obstacle = bridge.get_obstacle()
+    game_world.obstacles = background.get_obstacles() + ([bridge_obstacle] if bridge_obstacle else [])
+
+
 def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles]
 
 
 def init():
-    global background, kai, hud
+    global background, bridge, kai, hud
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, WATERWAY_IMAGE, None, WATERWAY_OBSTACLES)
-    game_world.obstacles = background.obstacles
+    bridge = GlassBridge(background, GLASS_BOX, BRIDGE_PATH)
+    update_obstacles()
     game_world.hittables = []
     hud = ElementHud()
     kai = Kai(0, 0)
@@ -80,6 +92,8 @@ def handle_events():
 
 
 def update(frame_time):
+    bridge.update(frame_time)
+    update_obstacles()
     offset = push_out_offset(kai.get_bb(), obstacle_bbs())
     if offset:
         kai.x += offset[0]
@@ -91,6 +105,7 @@ def update(frame_time):
 
 def draw():
     background.draw()
+    bridge.draw()  # 돌로 굳은 발판 (배경 그림의 유리판 위에 덮어 그림)
     kai.draw()
     game_world.draw()
     hud.draw(kai.active_elements())

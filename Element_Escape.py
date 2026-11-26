@@ -3,7 +3,7 @@ import os
 from pico2d import *
 
 import game_framework
-import boiler_mode
+import waterway_mode
 
 WIDTH, HEIGHT = 1280, 720
 
@@ -11,5 +11,5 @@ WIDTH, HEIGHT = 1280, 720
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 open_canvas(WIDTH, HEIGHT)
-game_framework.run(boiler_mode)
+game_framework.run(waterway_mode)
 close_canvas()
