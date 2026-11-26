@@ -4,8 +4,6 @@ from pico2d import *
 
 import steam
 from collision import collide, collide_any
-from fire import BURNING_SIZE, BURNING_FRAMES, BURNING_FPS
-from water import WATER_IMAGE
 
 # 하수 변이체(brute): 수로 건너편을 좌우로 순찰하다가 카이가 보이면 추적함. 절대 죽지 않음
 # 증기 폭발로 생긴 증기가 시선을 가리면 카이를 놓치고("?") 다시 순찰로 돌아감
@@ -29,6 +27,8 @@ CONFUSED_COLS = (15, 16, 17, 18)
 BURN_OFFSET = 19
 WET_OFFSET = 29
 ELECTRIC_OFFSET = 39
+# 두리번 프레임(15열)에서 "?"만 있는 부분: 프레임 안 (left, top, right, bottom), 위에서부터의 픽셀 좌표
+QUESTION_BOX = (87, 2, 107, 26)
 WALK_FPS = 8
 RUN_FPS = 10
 CONFUSED_FPS = 4
@@ -76,15 +76,11 @@ def bb_center(bb):
 
 class Brute:
     image = None
-    burn_image = None
-    water_image = None
 
     def __init__(self, x, y, left_x, right_x, start_dir=1):
         # (x, y): 발 가운데. left_x ~ right_x 사이의 이 줄(y)을 좌우로 순찰함
         if Brute.image is None:
             Brute.image = load_image(BRUTE_IMAGE)
-            Brute.burn_image = load_image('sprite_sheet/sprite_sheet_fire/burning.png')
-            Brute.water_image = load_image(WATER_IMAGE)
         self.x, self.y = x, y
         self.patrol_y = y
         self.left_x, self.right_x = left_x, right_x
@@ -97,6 +93,7 @@ class Brute:
         self.struck = False    # 이번 내려찍기에서 이미 피해를 주었는지
         self.burn_time = 0.0
         self.wet_time = 0.0
+        self.ion_time = 0.0    # '이온화' 상태 남은 시간 (전기 공격이 생기면 ionize로 켬)
         self.flash_time = 0.0
         self.knockback_dir = (0, 0)
         self.knockback_time = 0.0
@@ -111,6 +108,12 @@ class Brute:
 
     def is_wet(self):
         return self.wet_time > 0
+
+    def is_ionized(self):
+        return self.ion_time > 0
+
+    def ionize(self, duration):
+        self.ion_time = duration
 
     def is_knocked_back(self):
         return self.knockback_time > 0
@@ -211,6 +214,7 @@ class Brute:
         self.attack_cooldown = max(0.0, self.attack_cooldown - frame_time)
         self.burn_time = max(0.0, self.burn_time - frame_time)
         self.wet_time = max(0.0, self.wet_time - frame_time)
+        self.ion_time = max(0.0, self.ion_time - frame_time)
         self.flash_time = max(0.0, self.flash_time - frame_time)
         if self.is_knocked_back():
             speed = steam.KNOCKBACK_SPEED * self.knockback_time / steam.KNOCKBACK_TIME
@@ -290,15 +294,32 @@ class Brute:
 
     # ---- 그리기 ----
     def status_offset(self):
-        # 불타는/젖음 상태의 걷기, 달리기 프레임이 있는 구간
+        # 불타는/젖음/이온화 상태의 걷기, 달리기 프레임이 있는 구간 (상태가 없으면 0)
         if self.is_burning():
             return BURN_OFFSET
         if self.is_wet():
             return WET_OFFSET
+        if self.is_ionized():
+            return ELECTRIC_OFFSET
         return 0
 
     def current_col(self):
-        """(열, 시트에 상태 모습이 그려져 있는지)"""
+        """(열, 머리 위에 "?"를 덧그려야 하는지)"""
+        walk_col = WALK_COLS[int(self.anim_time * WALK_FPS * self.speed_rate()) % len(WALK_COLS)]
+        run_col = RUN_COLS[int(self.anim_time * RUN_FPS) % len(RUN_COLS)]
+        offset = self.status_offset()
+        if offset:
+            # 상태가 있으면 시트의 상태별 구간에는 걷기/달리기만 있으므로, 포효, 내려찍기, 맞음, 두리번도
+            # 그 구간의 프레임으로 대신해 상태 모습이 잠깐이라도 사라지지 않게 함
+            if self.state == 'chase':
+                return offset + run_col, False
+            if self.state == 'patrol' or self.state == 'return':
+                if not (self.is_knocked_back() or self.flash_time > 0):
+                    return offset + walk_col, False
+            if self.state == 'attack' and self.state_time >= ATTACK_WINDUP:
+                return offset + RUN_COLS[2], False  # 내려찍는 순간: 앞으로 내딛는 달리기 프레임
+            # 포효, 팔을 드는 중, 맞음, 두리번: 서 있는 프레임 (두리번은 "?"를 덧그림)
+            return offset + WALK_COLS[0], self.state == 'confused'
         if self.is_knocked_back() or self.flash_time > 0:
             return HIT_COL, False
         if self.state == 'roar':
@@ -308,35 +329,24 @@ class Brute:
         if self.state == 'confused':
             return CONFUSED_COLS[int(self.state_time * CONFUSED_FPS) % len(CONFUSED_COLS)], False
         if self.state == 'chase':
-            col = RUN_COLS[int(self.anim_time * RUN_FPS) % len(RUN_COLS)]
-        else:
-            col = WALK_COLS[int(self.anim_time * WALK_FPS * self.speed_rate()) % len(WALK_COLS)]
-        return col + self.status_offset(), True
+            return run_col, False
+        return walk_col, False
 
     def draw(self):
         size = FRAME_SIZE * BRUTE_SCALE
         center_y = self.y + (FRAME_SIZE / 2 - GROUND_MARGIN) * BRUTE_SCALE
-        col, status_drawn = self.current_col()
+        col, question = self.current_col()
         Brute.image.clip_draw(col * FRAME_SIZE, SHEET_HEIGHT - (self.row + 1) * FRAME_SIZE,
                               FRAME_SIZE, FRAME_SIZE, self.x, center_y, size, size)
-        if status_drawn:
-            return
-        # 포효, 내려찍기, 맞음, 두리번 프레임은 상태별 그림이 없어서 불길/물방울을 덧그려 상태를 보여줌
-        if self.is_burning():
-            # 몸에 불이 붙어 타오름
-            col = int(self.anim_time * BURNING_FPS) % BURNING_FRAMES
-            Brute.burn_image.clip_draw(col * BURNING_SIZE, 0, BURNING_SIZE, BURNING_SIZE,
-                                       self.x, center_y + 6, BURNING_SIZE, BURNING_SIZE)
-        if self.is_wet():
-            # 몸에서 물방울이 뚝뚝 떨어짐 (water.png의 아래로 떨어지는 물방울 행)
-            for i, offset_x in enumerate((-22, 4, 24)):
-                t = (self.anim_time * 1.5 + i * 0.37) % 1.0
-                drop_size = 22 * BRUTE_SCALE
-                Brute.water_image.opacify(1 - t)
-                Brute.water_image.clip_draw(i % 4 * 64, 512 - 7 * 64, 64, 64,
-                                            self.x + offset_x * BRUTE_SCALE, center_y + 20 - t * 40,
-                                            drop_size, drop_size)
-            Brute.water_image.opacify(1)
+        if question:
+            # 두리번 프레임(15열, 0행)의 "?"만 잘라서 같은 자리에 그림. 두리번 프레임처럼 좌우로 살짝 흔들림
+            left, top, right, bottom = QUESTION_BOX
+            shake = 2 * (int(self.state_time * CONFUSED_FPS) % 2)
+            src_bottom = SHEET_HEIGHT - FRAME_SIZE + (FRAME_SIZE - bottom)
+            qx = self.x + ((left + right) / 2 + shake - FRAME_SIZE / 2) * BRUTE_SCALE
+            qy = center_y + (FRAME_SIZE / 2 - (top + bottom) / 2) * BRUTE_SCALE
+            Brute.image.clip_draw(CONFUSED_COLS[0] * FRAME_SIZE + left, src_bottom, right - left, bottom - top,
+                                  qx, qy, (right - left) * BRUTE_SCALE, (bottom - top) * BRUTE_SCALE)
 
     def draw_chase_range(self):
         color = (255, 0, 0) if self.is_chasing() else (255, 220, 0)
