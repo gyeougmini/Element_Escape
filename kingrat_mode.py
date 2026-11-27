@@ -10,6 +10,7 @@ from hud import ElementHud
 from kai import Kai, DIRECTION_ROWS
 from kingrat import KingRat
 from notice import Notice
+from capsule import PillCapsule, ELECTRIC_CAPSULE
 from sliding_door import SlidingDoor
 
 # 킹랫 방(kingrat_bg.png): 스테이지 2의 보스방. 하수 터널에서 저수조 문으로 들어오면 나오는 단계
@@ -52,6 +53,9 @@ BOSS_BAR_WIDTH = 460
 BOSS_BAR_HEIGHT = 12
 BOSS_BAR_TOP_MARGIN = 44
 BOSS_NAME = '킹 랫'
+# 킹 랫이 쓰러지는 연출이 끝나면 오른쪽 위 전기 장치의 유리관이 열려 전기의 초능력 알약이 나옴. 먹으면 안내가 나옴
+ELECTRIC_NOTICE_TEXT = '전기의 초능력을 얻었다!\n전기 공격: R'
+ELECTRIC_NOTICE_HOLD = 2.5
 KAI_START_IMAGE_POS = (864, 650)  # 시작 위치: 오른쪽 아래 입구 안쪽 (위에서부터의 픽셀 좌표)
 
 show_bbs = False  # F1로 충돌 박스 표시 토글
@@ -119,8 +123,14 @@ def obstacle_bbs():
     return [bb for bb, _, _ in game_world.obstacles] + [pool_bb]
 
 
+def eat_electric_pill():
+    global notice
+    kai.electric_unlocked = True
+    notice = Notice(ELECTRIC_NOTICE_TEXT, ELECTRIC_NOTICE_HOLD)
+
+
 def init():
-    global background, pool_bb, kai, hud, kingrat, flames, fire_tiles_spawned, power_door, notice, boss_font
+    global background, pool_bb, kai, hud, kingrat, flames, fire_tiles_spawned, power_door, notice, boss_font, capsule
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, KINGRAT_IMAGE, None, KINGRAT_OBSTACLES)
     pool_bb = to_canvas_box(POOL_BOX)
@@ -129,6 +139,7 @@ def init():
     update_obstacles()
     power_door = SlidingDoor(background, POWER_DOOR_BOX, POWER_DOOR_SEAM_X)
     notice = None
+    capsule = PillCapsule(background, ELECTRIC_CAPSULE)  # 전기의 초능력 알약이 든 장치
     if boss_font is None:
         boss_font = load_font(FONT_PATH, 20)
     kingrat = KingRat(background.to_canvas_x(KINGRAT_START_IMAGE_POS[0]),
@@ -191,10 +202,13 @@ def update(frame_time):
         burn_if_touching_flame(kingrat)
     # 잠수 중(무적)이거나 쓰러지면 공격이 지나감
     game_world.hittables = [] if kingrat.is_dead() or kingrat.is_invulnerable() else [kingrat]
-    # 킹 랫이 쓰러지는 연출이 끝나면 발전실 문이 열림
+    # 킹 랫이 쓰러지는 연출이 끝나면 발전실 문이 열리고, 전기 장치의 유리관이 열려 알약이 나와 떠다님
     if kingrat.is_death_done():
         power_door.open()
+        capsule.open()
     power_door.update(frame_time)
+    if capsule.update(frame_time, kai):
+        eat_electric_pill()
     if notice:
         notice.update(frame_time)
         if notice.is_done():
@@ -205,9 +219,10 @@ def update(frame_time):
 
 def draw():
     background.draw()
-    power_door.draw()  # 열리는 발전실 문 (배경 그림의 일부라서 배경 바로 위에 그림)
+    power_door.draw()  # 열리는 발전실 문과
+    capsule.draw_machine()  # 전기 장치의 유리관 (둘 다 벽 그림의 일부라서 배경 바로 위에 그림)
     # 발이 위쪽에 있는 것부터 그려서 아래쪽(화면 앞쪽)이 위에 겹치게 함
-    actors = [kai] + flames + ([] if kingrat.is_death_done() else [kingrat])
+    actors = [kai, capsule] + flames + ([] if kingrat.is_death_done() else [kingrat])
     for actor in sorted(actors, key=lambda a: a.foot_y(), reverse=True):
         actor.draw()
     game_world.draw()
@@ -222,6 +237,8 @@ def draw():
         draw_bb(kingrat.get_bb())
         draw_bb(kingrat.get_hit_bb())
         kingrat.draw_range()
+        if capsule.is_floating():
+            draw_bb(capsule.get_bb())
         for o in game_world.objects:
             if hasattr(o, 'draw_range'):
                 o.draw_range()  # 증기가 시야를 가리는 범위

@@ -10,7 +10,7 @@ from kai import Kai, DIRECTION_ROWS
 from notice import Notice
 from sliding_door import SlidingDoor
 from warden import Warden
-from water_capsule import WaterCapsule
+from capsule import PillCapsule, WATER_CAPSULE
 
 # 워든 맵(warden_bg.png): 간수실에서 통제실 문으로 들어오면 나오는 보스 단계
 WARDEN_MAP_IMAGE = 'sprite_sheet/sprite_sheet_bg/warden_bg.png'
@@ -70,7 +70,7 @@ def init():
     start_x, start_y = WARDEN_START_IMAGE_POS
     warden.place_feet_at(background.to_canvas_x(start_x), background.to_canvas_y(start_y))
     game_world.hittables = [warden]  # 파이어볼에 맞는 대상
-    capsule = WaterCapsule(background)
+    capsule = PillCapsule(background, WATER_CAPSULE)
     boiler_door = SlidingDoor(background, BOILER_DOOR_BOX, BOILER_DOOR_SEAM_X)
     left, top, right, bottom = BOILER_ENTRY_BOX
     entry_bb = (background.to_canvas_x(left), background.to_canvas_y(bottom),

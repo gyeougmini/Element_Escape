@@ -4,18 +4,22 @@ from pico2d import *
 
 from collision import collide
 
-# 워든 맵 오른쪽 위 캡슐 장치: 물의 초능력 알약이 유리관 안에 보관되어 있음
-# water_capsule_glass.png: 배경의 유리관 패널(알약을 지운 것), water_pill.png: 알약 (둘 다 warden_bg.png에서 떼어냄)
-GLASS_IMAGE = 'sprite_sheet/sprit_sheet_object/water_capsule_glass.png'
-PILL_IMAGE = 'sprite_sheet/sprit_sheet_object/water_pill.png'
+# 맵 오른쪽 위 캡슐 장치: 초능력 알약이 유리관 안에 보관되어 있음
+# 워든 맵(물)과 킹랫 방(전기)의 장치는 색만 다르고 모양과 자리가 같음
+# *_capsule_glass.png: 배경의 유리관 패널(알약을 지운 것), *_pill.png: 알약 (각 배경에서 떼어냄)
+WATER_CAPSULE = ('sprite_sheet/sprit_sheet_object/water_capsule_glass.png',
+                 'sprite_sheet/sprit_sheet_object/water_pill.png',
+                 (22, 30, 40))      # (유리관 그림, 알약 그림, 유리가 올라가면 드러나는 관 안쪽 색)
+ELECTRIC_CAPSULE = ('sprite_sheet/sprit_sheet_object/electric_capsule_glass.png',
+                    'sprite_sheet/sprit_sheet_object/electric_pill.png',
+                    (30, 24, 42))
 # 배경 이미지 기준 픽셀 좌표 (위에서부터)
 GLASS_BOX = (611, 45, 669, 128)     # 유리 패널이 그려진 자리 (left, top, right, bottom)
 INSIDE_BOX = (612, 46, 668, 127)    # 유리가 올라가면 드러나는 관 안쪽
-INSIDE_COLOR = (22, 30, 40)
 PILL_IN_TUBE = (639, 83)            # 관 안에 있을 때 알약의 가운데
 HOVER_GROUND = (640, 262)           # 나온 뒤 떠 있는 자리의 바닥(그림자) 위치: 장치 받침대(아래쪽 끝 188) 앞
 
-OPEN_DELAY = 0.5        # 워든의 쓰러지는 연출이 끝나고 유리관이 열리기까지 기다리는 시간(초)
+OPEN_DELAY = 0.5        # 보스의 쓰러지는 연출이 끝나고 유리관이 열리기까지 기다리는 시간(초)
 OPEN_TIME = 1.0         # 유리 패널이 위로 올라가 열리는 시간
 RELEASE_TIME = 1.2      # 알약이 관에서 나와 떠 있는 자리까지 날아가는 시간
 FLOAT_SCALE = 2.0       # 떠 있을 때 알약 크기 (원래 그림의 배수, 관 안에서는 배경과 같은 크기)
@@ -31,12 +35,14 @@ def ease_in_out(t):
     return t * t * (3 - 2 * t)
 
 
-class WaterCapsule:
-    """워든이 쓰러지면 유리관이 열리고, 물의 초능력 알약이 나와 공중에서 위아래로 떠다님. 카이가 닿으면 먹음"""
+class PillCapsule:
+    """보스가 쓰러지면 유리관이 열리고, 초능력 알약이 나와 공중에서 위아래로 떠다님. 카이가 닿으면 먹음
+    kind: WATER_CAPSULE 또는 ELECTRIC_CAPSULE"""
 
-    def __init__(self, background):
-        self.glass_image = load_image(GLASS_IMAGE)
-        self.pill_image = load_image(PILL_IMAGE)
+    def __init__(self, background, kind):
+        glass_path, pill_path, self.inside_color = kind
+        self.glass_image = load_image(glass_path)
+        self.pill_image = load_image(pill_path)
         self.bg = background
         self.scale_x = background.to_canvas_x(1) - background.to_canvas_x(0)
         self.scale_y = background.to_canvas_y(0) - background.to_canvas_y(1)
@@ -52,7 +58,7 @@ class WaterCapsule:
                 self.bg.to_canvas_x(right), self.bg.to_canvas_y(top))
 
     def open(self):
-        """워든이 쓰러지는 연출이 끝나면 호출: 잠깐 뒤에 유리관이 열림"""
+        """보스가 쓰러지는 연출이 끝나면 호출: 잠깐 뒤에 유리관이 열림"""
         if self.state == 'closed':
             self.set_state('waiting')
 
@@ -116,9 +122,7 @@ class WaterCapsule:
         """배경 바로 위에 그림: 열리는 유리관과 관 안의 알약"""
         if self.state == 'closed':
             return  # 닫혀 있으면 배경 그림 그대로
-        draw_rectangle(*self.to_bb(INSIDE_BOX), *INSIDE_COLOR, 255, filled=True)
-        if self.state in ('waiting', 'opening'):
-            self.draw_pill()  # 유리 뒤에 있는 알약
+        draw_rectangle(*self.to_bb(INSIDE_BOX), *self.inside_color, 255, filled=True)
         # 유리 패널이 위쪽 덮개 속으로 올라감: 아래쪽부터 드러나도록 위쪽을 잘라서 그림
         rise = 0.0
         if self.state == 'opening':
@@ -127,13 +131,16 @@ class WaterCapsule:
             rise = 1.0
         h = self.glass_image.h
         visible = int(round(h * (1 - rise)))
-        if visible <= 0:
-            return
-        left, bottom, right, top = self.to_bb(GLASS_BOX)
-        draw_h = visible * self.scale_y
-        # pico2d는 아래쪽이 원점: 그림의 아래쪽 visible줄을 위쪽에 붙여 그림
-        self.glass_image.clip_draw(0, 0, self.glass_image.w, visible,
-                                   (left + right) / 2, top - draw_h / 2, right - left, draw_h)
+        if visible > 0:
+            left, bottom, right, top = self.to_bb(GLASS_BOX)
+            draw_h = visible * self.scale_y
+            # pico2d는 아래쪽이 원점: 그림의 아래쪽 visible줄을 위쪽에 붙여 그림
+            self.glass_image.clip_draw(0, 0, self.glass_image.w, visible,
+                                       (left + right) / 2, top - draw_h / 2, right - left, draw_h)
+        # 관 안의 알약: 유리 그림이 불투명해서 유리 뒤에 그리면 유리가 지나가는 동안 가려지므로 유리 위에 그림
+        # (배경 그림에서도 알약은 유리 위에 그려져 있어서, 닫혀 있을 때의 모습은 같음)
+        if self.state in ('waiting', 'opening'):
+            self.draw_pill()
 
     def draw(self):
         """다른 캐릭터들과 앞뒤 순서를 맞춰 그림: 관에서 나온 뒤의 알약과 그림자"""

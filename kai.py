@@ -94,6 +94,7 @@ class Kai:
         self.water_ready = False
         self.water_unlocked = False  # 물의 초능력 알약을 먹었는지
         self.electric_ready = False
+        self.electric_unlocked = False  # 전기의 초능력 알약을 먹었는지
         self.max_hp = self.hp = KAI_HP
         self.max_energy = self.energy = KAI_ENERGY
         self.knockback_dir = (0, 0)
@@ -167,7 +168,9 @@ class Kai:
                 self.water_ready = not self.water_ready
             return
         if event.type == SDL_KEYDOWN and event.key == SDLK_r:
-            self.electric_ready = not self.electric_ready
+            # 전기의 초능력 알약을 먹은 뒤에만 전기 공격을 준비할 수 있음 (한 번 더 누르면 취소)
+            if self.electric_unlocked:
+                self.electric_ready = not self.electric_ready
             return
         if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
             if self.fire_ready or self.water_ready:
