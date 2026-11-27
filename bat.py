@@ -179,6 +179,11 @@ class Bat:
             self.wet_time = WET_TIME
             self.start_wander()
 
+    def on_electric_hit(self, dir_x, dir_y, damage):
+        # 전기 공격: 밀려나며 피해를 받음
+        self.take_damage(damage)
+        self.knock_back(dir_x, dir_y)
+
     def ignite(self):
         self.burn_time = BURN_TIME
         self.burn_damage_left = BURN_DAMAGE

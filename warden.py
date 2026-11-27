@@ -151,6 +151,11 @@ class Warden:
             self.attack_time = None
             steam.explode_at(self, dir_x, dir_y)
 
+    def on_electric_hit(self, dir_x, dir_y, damage):
+        # 전기 공격: 보스라서 밀려나지는 않고, 하얗게 번쩍이며 피해를 받음
+        self.take_damage(damage)
+        self.flash_time = HIT_FLASH_TIME
+
     def is_knocked_back(self):
         return self.knockback_time > 0
 

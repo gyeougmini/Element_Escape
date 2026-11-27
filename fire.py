@@ -34,9 +34,11 @@ FIREBALL_ROW_COUNT = 8
 
 
 class Fireball:
-    # 물 공격(water.py의 WaterBall)이 이 클래스를 이어받아 그림, 속도, 피해, 맞았을 때의 반응만 바꿈
+    # 물/전기 공격(water.py의 WaterBall, electric.py의 ElectricBall)이 이 클래스를 이어받아
+    # 그림, 속도, 피해, 맞았을 때의 반응만 바꿈
     image = None  # 클래스마다 따로 불러옴 (이어받는 클래스도 image = None을 따로 가져야 함)
     IMAGE_PATH = 'sprite_sheet/sprite_sheet_fire/fireball_sheet.png'
+    SHEET_HEIGHT = FIREBALL_SHEET_HEIGHT  # 날아가는 프레임(4열 x 8행)이 시트 맨 위에 있으므로 행 위치 계산에 씀
     SPEED = FIREBALL_SPEED
     DAMAGE = FIREBALL_DAMAGE
     FPS = FIREBALL_FPS
@@ -94,20 +96,22 @@ class Fireball:
     def draw(self):
         col = int(self.anim_time * self.FPS) % FIREBALL_FRAMES
         self.image.clip_draw(col * FIREBALL_SIZE,
-                             FIREBALL_SHEET_HEIGHT - (self.row + 1) * FIREBALL_SIZE,
+                             self.SHEET_HEIGHT - (self.row + 1) * FIREBALL_SIZE,
                              FIREBALL_SIZE, FIREBALL_SIZE, self.x, self.y)
 
 
 class OneShotEffect:
-    """가로로 나열된 프레임을 한 번 재생하고 사라지는 이펙트"""
+    """가로로 나열된 프레임을 한 번 재생하고 사라지는 이펙트
+    clip_bottom: 프레임 줄이 시트 아래쪽 끝에서 떨어진 높이 (여러 줄이 든 시트에서 한 줄만 쓸 때)"""
     images = {}  # 경로별로 한 번만 로드
 
-    def __init__(self, image_path, x, y, size, frames, fps):
+    def __init__(self, image_path, x, y, size, frames, fps, clip_bottom=0):
         if image_path not in OneShotEffect.images:
             OneShotEffect.images[image_path] = load_image(image_path)
         self.image = OneShotEffect.images[image_path]
         self.x, self.y = x, y
         self.size, self.frames, self.fps = size, frames, fps
+        self.clip_bottom = clip_bottom
         self.anim_time = 0.0
         self.alive = True
 
@@ -118,7 +122,7 @@ class OneShotEffect:
 
     def draw(self):
         col = min(int(self.anim_time * self.fps), self.frames - 1)
-        self.image.clip_draw(col * self.size, 0, self.size, self.size, self.x, self.y)
+        self.image.clip_draw(col * self.size, self.clip_bottom, self.size, self.size, self.x, self.y)
 
 
 class FireLaunch(OneShotEffect):

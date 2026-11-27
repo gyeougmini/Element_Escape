@@ -186,6 +186,10 @@ class Brute:
             return
         self.wet_time = WET_TIME
 
+    def on_electric_hit(self, dir_x, dir_y, damage):
+        # 불, 물과 마찬가지로 전기 공격 자체로는 피해를 받지 않고 맞은 모습만 보여줌
+        self.flash_time = FLASH_TIME
+
     # ---- 움직임 ----
     def set_state(self, state):
         self.state = state

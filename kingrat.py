@@ -87,6 +87,7 @@ BURN_DAMAGE = 15
 STEAM_DAMAGE = 30
 STEAM_WEAKNESS = 2
 FLASH_TIME = 0.12
+ION_TIME = 2.0          # 전기 공격에 맞으면 이 시간 동안 '이온화' 상태 (이온화 걷기 프레임으로 그림)
 DEATH_TIME = 1.5
 
 DIRECTION_ROWS = {
@@ -257,6 +258,15 @@ class KingRat:
         if self.is_burning() and not self.is_dead():
             self.burn_time = self.burn_damage_left = 0.0
             self.steam_explode(dir_x, dir_y)
+
+    def on_electric_hit(self, dir_x, dir_y, damage):
+        # 전기 공격: 번쩍이며 피해를 받고 이온화 상태가 됨
+        if self.is_invulnerable() or self.is_dead():
+            return
+        self.take_damage(damage)
+        self.flash_time = FLASH_TIME
+        if not self.is_dead():
+            self.ionize(ION_TIME)
 
     def update_burn(self, frame_time):
         if not self.is_burning():

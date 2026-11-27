@@ -141,6 +141,11 @@ class Rat:
         if not self.is_dead():
             self.wet_time = WET_TIME
 
+    def on_electric_hit(self, dir_x, dir_y, damage):
+        # 전기 공격: 밀려나며 피해를 받음
+        self.hp = max(0, self.hp - damage)
+        self.knock_back(dir_x, dir_y)
+
     def extinguish(self):
         # 불타는 상태를 끝냄: 남은 지속 피해는 받지 않음
         self.burn_time = 0.0

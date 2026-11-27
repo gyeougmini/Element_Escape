@@ -4,6 +4,8 @@ from pico2d import *
 
 import game_world
 from collision import collide_any
+from electric import (ElectricBall, ElectricLaunch, ELECTRIC_IMAGE, LAUNCH_CLIP_BOTTOM as ELECTRIC_GLOW_CLIP_BOTTOM,
+                      LAUNCH_SIZE as ELECTRIC_GLOW_SIZE)
 from fire import Fireball, FireLaunch
 from water import WaterBall, WATER_IMAGE
 
@@ -25,7 +27,7 @@ FOOT_HEIGHT = 12
 ATTACK_COLS = (6, 7)
 ATTACK_FRAME_TIME = 0.12  # 공격 프레임 하나의 시간(초)
 ATTACK_DURATION = 0.3     # 공격 상태 전체 시간(초)
-# 6~7열은 손에 불꽃이 그려져 있으므로, 물만 준비해서 쏠 때는 대신 kai_idle.png의 이 열(불꽃 없는 모습)을 쓰고
+# 6~7열은 손에 불꽃이 그려져 있으므로, 불 없이(물/전기만) 쏠 때는 대신 kai_idle.png의 이 열(불꽃 없는 모습)을 쓰고
 # 손의 물방울이 발사 순간까지 커지다가 발사되면 사라지게 함
 WATER_ATTACK_IDLE_COL = 0
 WATER_CHARGE_SCALE = 1.6  # 발사 직전 손의 물방울 크기 배율
@@ -34,12 +36,14 @@ FIRE_SPAWN_DISTANCE = 30  # 몸 중심에서 파이어볼이 생기는 거리
 READY_GLOW_SIZE = 64      # fire_ready 표시: fire_launch.png 첫 프레임을 손에 띄움
 WATER_GLOW_SCALE = 0.6    # water_ready 표시: water.png에서 바라보는 방향의 물방울을 작게 손에 띄움
 WATER_SHEET_HEIGHT = 512
+ELECTRIC_GLOW_SCALE = 0.7  # electric_ready 표시: electric.png의 발사 섬광 첫 프레임(작은 스파크)을 손에 띄움
 READY_GLOW_DISTANCE = 20  # 몸 중심에서 표시가 떨어진 거리
 
 KAI_HP = 100
 KAI_ENERGY = 100
 FIRE_ENERGY_COST = 5  # 파이어볼 한 발에 쓰는 에너지
 WATER_ENERGY_COST = 5  # 물 공격 한 발에 쓰는 에너지
+ELECTRIC_ENERGY_COST = 5  # 전기 공격 한 발에 쓰는 에너지
 ENERGY_REGEN = 3.5     # 초당 에너지 충전량
 # 쥐에게 부딪히면 반대 방향으로 밀려남: 처음 속도에서 0까지 줄어들며 약 60px 이동
 KNOCKBACK_SPEED = 480
@@ -78,6 +82,7 @@ class Kai:
         self.idle_image = load_image('sprite_sheet/sprite_sheet_kai/kai_idle.png')
         self.ready_image = load_image('sprite_sheet/sprite_sheet_fire/fire_launch.png')
         self.water_ready_image = load_image(WATER_IMAGE)
+        self.electric_ready_image = load_image(ELECTRIC_IMAGE)
         self.x, self.y = x, y
         self.dir_x, self.dir_y = 0, 0
         # 눌려 있는 방향키: 눌림을 못 받은 키의 뗌 신호가 와도 방향이 틀어지지 않도록 직접 기록
@@ -173,7 +178,7 @@ class Kai:
                 self.electric_ready = not self.electric_ready
             return
         if event.type == SDL_MOUSEBUTTONDOWN and event.button == SDL_BUTTON_LEFT:
-            if self.fire_ready or self.water_ready:
+            if self.fire_ready or self.water_ready or self.electric_ready:
                 # SDL 마우스 좌표는 위에서부터이므로 pico2d 좌표로 뒤집음
                 self.aim_at(event.x, get_canvas_height() - 1 - event.y)
             return
@@ -188,7 +193,8 @@ class Kai:
 
     def attack_cost(self):
         # 준비된 속성마다 한 발씩 쏘므로 그만큼 에너지를 씀
-        return FIRE_ENERGY_COST * self.fire_ready + WATER_ENERGY_COST * self.water_ready
+        return (FIRE_ENERGY_COST * self.fire_ready + WATER_ENERGY_COST * self.water_ready
+                + ELECTRIC_ENERGY_COST * self.electric_ready)
 
     def aim_at(self, target_x, target_y):
         # 공격 중이거나 에너지가 모자라면 쏘지 않음
@@ -211,7 +217,7 @@ class Kai:
         self.fired = False
 
     def launch_fireball(self):
-        # 클릭한 방향(fire_dir)으로 준비된 속성의 공격을 발사 (불과 물이 둘 다 준비되어 있으면 둘 다)
+        # 클릭한 방향(fire_dir)으로 준비된 속성의 공격을 발사 (여러 속성이 준비되어 있으면 모두)
         dir_x, dir_y = self.fire_dir
         spawn_x = self.x + dir_x * FIRE_SPAWN_DISTANCE
         spawn_y = self.hand_y() + dir_y * FIRE_SPAWN_DISTANCE
@@ -220,6 +226,9 @@ class Kai:
             game_world.add(FireLaunch(spawn_x, spawn_y))
         if self.water_ready:
             game_world.add(WaterBall(spawn_x, spawn_y, dir_x, dir_y))
+        if self.electric_ready:
+            game_world.add(ElectricBall(spawn_x, spawn_y, dir_x, dir_y))
+            game_world.add(ElectricLaunch(spawn_x, spawn_y))
 
     def update(self, frame_time, obstacles):
         self.anim_time += frame_time
@@ -248,8 +257,12 @@ class Kai:
         # 물만 준비된 상태로 공격 중인지 (불꽃이 그려진 공격 프레임을 쓰지 않음)
         return self.state == 'fire_attack' and self.water_ready and not self.fire_ready
 
+    def is_fireless_attack(self):
+        # 불 없이(물/전기만) 공격 중인지: 손에 불꽃이 그려진 공격 프레임을 쓰지 않음
+        return self.state == 'fire_attack' and not self.fire_ready
+
     def draw(self):
-        if self.is_water_only_attack():
+        if self.is_fireless_attack():
             image, col = self.idle_image, WATER_ATTACK_IDLE_COL
         elif self.state == 'fire_attack':
             attack_frame = min(int(self.attack_time / ATTACK_FRAME_TIME), len(ATTACK_COLS) - 1)
@@ -273,7 +286,7 @@ class Kai:
             self.draw_ready_glow()
 
     def draw_ready_glow(self):
-        # 바라보는 쪽 손 위치에 불꽃/물방울을 띄워 발사 준비 중임을 표시
+        # 바라보는 쪽 손 위치에 불꽃/물방울/스파크를 띄워 발사 준비 중임을 표시
         dir_x, dir_y = ROW_DIRECTIONS[self.row]
         length = math.hypot(dir_x, dir_y)
         x = self.x + dir_x / length * READY_GLOW_DISTANCE
@@ -289,5 +302,9 @@ class Kai:
                 size *= 1 + (WATER_CHARGE_SCALE - 1) * charge
             self.water_ready_image.clip_draw(col * READY_GLOW_SIZE, WATER_SHEET_HEIGHT - (water_row + 1) * READY_GLOW_SIZE,
                                              READY_GLOW_SIZE, READY_GLOW_SIZE, x, y, size, size)
+        if self.electric_ready:
+            size = ELECTRIC_GLOW_SIZE * ELECTRIC_GLOW_SCALE
+            self.electric_ready_image.clip_draw(0, ELECTRIC_GLOW_CLIP_BOTTOM, ELECTRIC_GLOW_SIZE, ELECTRIC_GLOW_SIZE,
+                                                x, y, size, size)
         if self.fire_ready:
             self.ready_image.clip_draw(0, 0, READY_GLOW_SIZE, READY_GLOW_SIZE, x, y)
