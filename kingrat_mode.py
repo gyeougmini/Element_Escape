@@ -21,12 +21,14 @@ KINGRAT_OBSTACLES = [
     (0, 705, 1024, 768, WALL),   # 아래 (오른쪽 아래 입구 포함)
     (0, 0, 64, 768, WALL),       # 왼쪽
     (960, 0, 1024, 768, WALL),   # 오른쪽
-    # 가운데 저수조 (수심 3m, 난간 포함). 위쪽 배수구에서 저수조로 이어지는 철망은 하수구 덮개라서 밟고 지나갈 수 있음
-    (240, 300, 785, 588, WALL),
     # 물체
     (72, 125, 188, 188, OBJECT),   # 왼쪽 위 밸브 장치
     (596, 128, 686, 186, OBJECT),  # 전기 장치
 ]
+# 가운데 저수조 (수심 3m, 난간 포함): 걸어서는 지나갈 수 없지만 물이 아래쪽에 담겨 있어서 공격은 위로 날아감
+# (그래서 공격이 부딪히는 game_world.obstacles에는 넣지 않고, 이동할 때만 막음)
+# 위쪽 배수구에서 저수조로 이어지는 철망은 하수구 덮개라서 밟고 지나갈 수 있음
+POOL_BOX = (240, 300, 785, 588)
 KINGRAT_START_IMAGE_POS = (260, 230)  # 킹 랫 시작 위치: 왼쪽 위 쥐구멍 앞 (발 가운데)
 ROOM_BOX = (64, 135, 960, 705)
 POOL_WATER_BOX = (262, 338, 766, 572)  # 저수조의 물 부분 (킹 랫이 뛰어들어 헤엄치는 곳)        # 방 안쪽 (독 침이 날아가는 범위, 킹 랫이 튀어나올 수 있는 범위)
@@ -113,13 +115,15 @@ def draw_boss_bar():
 
 
 def obstacle_bbs():
-    return [bb for bb, _, _ in game_world.obstacles]
+    # 걸어서 지나갈 수 없는 곳: 공격이 부딪히는 장애물 + 저수조
+    return [bb for bb, _, _ in game_world.obstacles] + [pool_bb]
 
 
 def init():
-    global background, kai, hud, kingrat, flames, fire_tiles_spawned, power_door, notice, boss_font
+    global background, pool_bb, kai, hud, kingrat, flames, fire_tiles_spawned, power_door, notice, boss_font
     width, height = get_canvas_width(), get_canvas_height()
     background = Background(width, height, KINGRAT_IMAGE, None, KINGRAT_OBSTACLES)
+    pool_bb = to_canvas_box(POOL_BOX)
     flames = []
     fire_tiles_spawned = False
     update_obstacles()
